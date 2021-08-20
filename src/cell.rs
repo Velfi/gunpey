@@ -62,14 +62,13 @@ impl Cell {
         // TODO I feel bad about this, please help me
         // Some of this will be much nicer once the experimental or-patterns syntax is stabilized
         // https://github.com/rust-lang/rust/issues/54883
-        match (self, other) {
+        let is_connected = match (self, other) {
             // If either Cell is empty, then no connection can be made
             (Cell::Empty, _) | (_, Cell::Empty) => false,
             (Cell::Filled(lf_a), Cell::Filled(lf_b)) => match (lf_a.kind, lf_b.kind, adjacency) {
                 (_, _, Same) => unreachable!("please don't ask if a cell is connected to itself"),
                 (_, _, NotAdjacent) => false,
                 (Caret, _, AboveLeft) | (Caret, _, Above) | (Caret, _, AboveRight) => false,
-                (Caret, Caret, _) => false,
                 (Caret, InvertedCaret, Below)
                 | (Caret, InvertedCaret, BelowLeft)
                 | (Caret, InvertedCaret, BelowRight) => true,
@@ -82,24 +81,35 @@ impl Cell {
                 | (Caret, RightSlash, BelowLeft)
                 | (Caret, RightSlash, Right) => true,
                 (Caret, RightSlash, Left) | (Caret, RightSlash, BelowRight) => false,
+                (Caret, Caret, BelowLeft) | (Caret, Caret, Below) | (Caret, Caret, BelowRight) => {
+                    false
+                }
+                (Caret, Caret, Left) | (Caret, Caret, Right) => true,
+
                 (InvertedCaret, _, BelowLeft)
                 | (InvertedCaret, _, Below)
                 | (InvertedCaret, _, BelowRight) => false,
-                (InvertedCaret, InvertedCaret, _) => false,
+                (InvertedCaret, InvertedCaret, AboveLeft)
+                | (InvertedCaret, InvertedCaret, Above)
+                | (InvertedCaret, InvertedCaret, AboveRight) => false,
+                (InvertedCaret, InvertedCaret, Left) | (InvertedCaret, InvertedCaret, Right) => {
+                    true
+                }
                 (InvertedCaret, Caret, Above)
                 | (InvertedCaret, Caret, AboveLeft)
                 | (InvertedCaret, Caret, AboveRight) => true,
                 (InvertedCaret, Caret, Left) | (InvertedCaret, Caret, Right) => false,
                 (InvertedCaret, LeftSlash, Above)
-                | (InvertedCaret, LeftSlash, AboveRight)
-                | (InvertedCaret, LeftSlash, Left) => true,
-                (InvertedCaret, LeftSlash, AboveLeft) | (InvertedCaret, LeftSlash, Right) => false,
+                | (InvertedCaret, LeftSlash, Right)
+                | (InvertedCaret, LeftSlash, AboveLeft) => true,
+                (InvertedCaret, LeftSlash, AboveRight) | (InvertedCaret, LeftSlash, Left) => false,
                 (InvertedCaret, RightSlash, Above)
                 | (InvertedCaret, RightSlash, AboveLeft)
                 | (InvertedCaret, RightSlash, Right) => true,
                 (InvertedCaret, RightSlash, Left) | (InvertedCaret, RightSlash, AboveRight) => {
                     false
                 }
+
                 (LeftSlash, _, BelowLeft) | (LeftSlash, _, AboveRight) => false,
                 (LeftSlash, Caret, Above)
                 | (LeftSlash, Caret, AboveLeft)
@@ -120,6 +130,7 @@ impl Cell {
                 | (LeftSlash, RightSlash, Left)
                 | (LeftSlash, RightSlash, Right) => true,
                 (LeftSlash, RightSlash, AboveLeft) | (LeftSlash, RightSlash, BelowRight) => false,
+
                 (RightSlash, _, AboveLeft) | (RightSlash, _, BelowRight) => false,
                 (RightSlash, Caret, Above)
                 | (RightSlash, Caret, AboveRight)
@@ -141,6 +152,8 @@ impl Cell {
                 (RightSlash, RightSlash, BelowLeft) | (RightSlash, RightSlash, AboveRight) => true,
                 (RightSlash, RightSlash, _) => false,
             },
-        }
+        };
+
+        is_connected
     }
 }

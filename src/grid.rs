@@ -43,7 +43,7 @@ impl Grid {
 
         let cells = chars
             .iter()
-            .flat_map(|row| row.iter().map(Cell::from_char))
+            .flat_map(|x| x.iter().map(Cell::from_char))
             .collect();
 
         Self {
@@ -58,7 +58,7 @@ impl Grid {
             .iter()
             .chunks(self.width)
             .into_iter()
-            .map(|row| row.into_iter().map(Cell::to_char).collect())
+            .map(|x| x.into_iter().map(Cell::to_char).collect())
             .collect()
     }
 
@@ -67,7 +67,7 @@ impl Grid {
             .iter()
             .chunks(self.width)
             .into_iter()
-            .map(|row| row.into_iter().map(|cell| cell.is_active() as u8).collect())
+            .map(|x| x.into_iter().map(|cell| cell.is_active() as u8).collect())
             .collect()
     }
 
@@ -95,8 +95,8 @@ impl Grid {
         }
     }
 
-    fn get_index_from_pos(&self, GridPos { row, column }: GridPos) -> Option<usize> {
-        let i = column + self.width * row;
+    fn get_index_from_pos(&self, GridPos { x, y }: GridPos) -> Option<usize> {
+        let i = y + self.width * x;
 
         (0..self.cells.len()).contains(&i).then(|| i)
     }
@@ -117,7 +117,7 @@ impl Grid {
         debug!("edges\n{:?}", edges);
 
         let mut is_connected_to_left_edge: HashSet<GridPos> = (0..self.height)
-            .map(|row| GridPos { row, column: 0 })
+            .map(|x| GridPos { x, y: 0 })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
 
@@ -140,9 +140,9 @@ impl Grid {
         }
 
         let mut is_connected_to_right_edge: HashSet<GridPos> = (0..self.height)
-            .map(|row| GridPos {
-                row,
-                column: self.width - 1,
+            .map(|x| GridPos {
+                x,
+                y: self.width - 1,
             })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
@@ -306,8 +306,8 @@ impl Grid {
         }
     }
 
-    pub fn pop_top_row(&mut self) -> Vector<Cell> {
-        debug!("removing top row from grid");
+    pub fn pop_top_x(&mut self) -> Vector<Cell> {
+        debug!("removing top x from grid");
         self.cells.slice(0..self.width)
     }
 
@@ -316,7 +316,7 @@ impl Grid {
             return Err(GunpeyLibError::InvalidRowLength(new_row.len(), self.width));
         }
 
-        debug!("pushing new row to bottom of grid");
+        debug!("pushing new x to bottom of grid");
         self.cells.append(new_row);
 
         self.recalculate_active_cells();
@@ -347,45 +347,45 @@ impl Grid {
             .unwrap_or_default()
     }
 
-    pub fn above(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.row == 0 {
+    pub fn below(&self, grid_pos: GridPos) -> Option<GridPos> {
+        if grid_pos.y == 0 {
             None
         } else {
             Some(GridPos {
-                row: grid_pos.row - 1,
+                y: grid_pos.y - 1,
                 ..grid_pos
             })
         }
     }
 
-    pub fn below(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.row == self.height - 1 {
+    pub fn above(&self, grid_pos: GridPos) -> Option<GridPos> {
+        if grid_pos.y == self.height - 1 {
             None
         } else {
             Some(GridPos {
-                row: grid_pos.row + 1,
+                y: grid_pos.y + 1,
                 ..grid_pos
             })
         }
     }
 
     pub fn right(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.column == self.width - 1 {
+        if grid_pos.x == self.width - 1 {
             None
         } else {
             Some(GridPos {
-                column: grid_pos.column + 1,
+                x: grid_pos.x + 1,
                 ..grid_pos
             })
         }
     }
 
     pub fn left(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.column == 0 {
+        if grid_pos.x == 0 {
             None
         } else {
             Some(GridPos {
-                column: grid_pos.column - 1,
+                x: grid_pos.x - 1,
                 ..grid_pos
             })
         }
@@ -409,29 +409,29 @@ impl Grid {
 }
 
 fn get_pos_from_index(index: usize, width: usize) -> GridPos {
-    let row = index / width;
-    let column = index % width;
+    let x = index % width;
+    let y = index / width;
 
-    GridPos { row, column }
+    GridPos { x, y }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     fn new_2x2_grid() -> Grid {
         Grid::new_from_chars(vec![vec!['.', '.'], vec!['.', '.']])
     }
 
-    //     col
-    // row 0,0 0,1
-    //     1,0 1,1
+    //   0,0 0,1
+    //   1,0 1,1
 
     #[test]
     fn test_grid_pos_above_some() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 1, column: 0 };
-        let expected = Some(GridPos { row: 0, column: 0 });
+        let starting_grid_pos = GridPos { x: 0, y: 0 };
+        let expected = Some(GridPos { x: 0, y: 1 });
         let actual = grid.above(starting_grid_pos);
 
         assert_eq!(expected, actual);
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn test_grid_pos_above_none() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 0 };
+        let starting_grid_pos = GridPos { x: 0, y: 1 };
         let expected = None;
         let actual = grid.above(starting_grid_pos);
 
@@ -450,8 +450,8 @@ mod tests {
     #[test]
     fn test_grid_pos_above_right_some() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 1, column: 0 };
-        let expected = Some(GridPos { row: 0, column: 1 });
+        let starting_grid_pos = GridPos { x: 0, y: 0 };
+        let expected = Some(GridPos { x: 1, y: 1 });
         let actual = grid.above_right(starting_grid_pos);
 
         assert_eq!(expected, actual);
@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn test_grid_pos_above_right_none() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 1 };
+        let starting_grid_pos = GridPos { x: 1, y: 1 };
         let expected = None;
         let actual = grid.above_right(starting_grid_pos);
 
@@ -470,8 +470,8 @@ mod tests {
     #[test]
     fn test_grid_pos_right_some() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 0 };
-        let expected = Some(GridPos { row: 0, column: 1 });
+        let starting_grid_pos = GridPos { x: 0, y: 0 };
+        let expected = Some(GridPos { x: 1, y: 0 });
         let actual = grid.right(starting_grid_pos);
 
         assert_eq!(expected, actual);
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn test_grid_pos_right_none() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 1 };
+        let starting_grid_pos = GridPos { x: 1, y: 0 };
         let expected = None;
         let actual = grid.right(starting_grid_pos);
 
@@ -490,8 +490,8 @@ mod tests {
     #[test]
     fn test_grid_pos_below_right_some() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 0 };
-        let expected = Some(GridPos { row: 1, column: 1 });
+        let starting_grid_pos = GridPos { x: 0, y: 1 };
+        let expected = Some(GridPos { x: 1, y: 0 });
         let actual = grid.below_right(starting_grid_pos);
 
         assert_eq!(expected, actual);
@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn test_grid_pos_below_right_none() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 1, column: 1 };
+        let starting_grid_pos = GridPos { x: 1, y: 0 };
         let expected = None;
         let actual = grid.below_right(starting_grid_pos);
 
@@ -510,8 +510,8 @@ mod tests {
     #[test]
     fn test_grid_pos_below_some() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 0, column: 0 };
-        let expected = Some(GridPos { row: 1, column: 0 });
+        let starting_grid_pos = GridPos { x: 0, y: 1 };
+        let expected = Some(GridPos { x: 0, y: 0 });
         let actual = grid.below(starting_grid_pos);
 
         assert_eq!(expected, actual);
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn test_grid_pos_below_none() {
         let grid = new_2x2_grid();
-        let starting_grid_pos = GridPos { row: 1, column: 0 };
+        let starting_grid_pos = GridPos { x: 0, y: 0 };
         let expected = None;
         let actual = grid.below(starting_grid_pos);
 
@@ -531,15 +531,28 @@ mod tests {
     fn test_edges_should_be_detected() {
         #[rustfmt::skip]
         let chars: CharGrid = vec![
-            vec!['/'],
-            vec!['/'],
+            vec!['∧','/'],
+            vec!['∨','\\'],
         ];
         let grid = Grid::new_from_chars(chars);
-        let expected: Vec<(GridPos, GridPos)> = vec![
-            (GridPos { row: 0, column: 0 }, GridPos { row: 1, column: 0 }),
-            (GridPos { row: 1, column: 0 }, GridPos { row: 0, column: 0 }),
+        let mut expected: Vec<(GridPos, GridPos)> = vec![
+            (GridPos::new(0, 0), GridPos::new(0, 1)),
+            (GridPos::new(0, 0), GridPos::new(1, 0)),
+            (GridPos::new(0, 0), GridPos::new(1, 1)),
+            (GridPos::new(1, 0), GridPos::new(0, 0)),
+            (GridPos::new(1, 0), GridPos::new(0, 1)),
+            (GridPos::new(1, 0), GridPos::new(1, 1)),
+            (GridPos::new(0, 1), GridPos::new(0, 0)),
+            (GridPos::new(0, 1), GridPos::new(1, 0)),
+            (GridPos::new(0, 1), GridPos::new(1, 1)),
+            (GridPos::new(1, 1), GridPos::new(0, 0)),
+            (GridPos::new(1, 1), GridPos::new(1, 0)),
+            (GridPos::new(1, 1), GridPos::new(0, 1)),
         ];
-        let actual = grid.edges();
+        expected.sort();
+
+        let mut actual = grid.edges();
+        actual.sort();
 
         assert_eq!(expected, actual)
     }
@@ -549,7 +562,7 @@ mod tests {
         #[rustfmt::skip]
         let chars: CharGrid = vec![
             vec!['∨','/'],
-            vec!['∧','\\'],
+            vec!['∧','.'],
         ];
         let grid = Grid::new_from_chars(chars);
         let expected: Vec<(GridPos, GridPos)> = vec![];

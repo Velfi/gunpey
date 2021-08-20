@@ -1,26 +1,26 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct GridPos {
-    pub row: usize,
-    pub column: usize,
+    pub y: usize,
+    pub x: usize,
 }
 
 impl GridPos {
-    pub fn new(column: usize, row: usize) -> Self {
-        Self { row, column }
+    pub fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
     }
 
     pub fn to_tuple(self) -> (usize, usize) {
-        let GridPos { row, column } = self;
-        (column, row)
+        let GridPos { y, x } = self;
+        (x, y)
     }
 
     #[rustfmt::skip]
     pub fn adjacency(&self, other: &Self) -> Adjacency {
         match (
-            self.column as i64 - other.column as i64,
-            self.row as i64 - other.row as i64,
+            self.x as i64 - other.x as i64,
+            self.y as i64 - other.y as i64,
         ) {
             ( 0,  0) => Adjacency::Same,
             ( 0, -1) => Adjacency::Above,
@@ -36,9 +36,15 @@ impl GridPos {
     }
 }
 
+impl Debug for GridPos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GridPos {{x: {}, y: {}}}", self.x, self.y)
+    }
+}
+
 impl Display for GridPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(x: {}, y: {})", self.column, self.row)
+        write!(f, "(x: {}, y: {})", self.x, self.y)
     }
 }
 

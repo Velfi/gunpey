@@ -1,8 +1,5 @@
-use druid::kurbo::Line;
 use druid::Data;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
-
-use crate::grid_pos::GridPos;
 
 #[derive(Debug, Clone, Copy, Data, PartialEq)]
 pub enum LineFragmentKind {
