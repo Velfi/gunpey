@@ -1,0 +1,29 @@
+[package]
+name = "gunpey"
+version = "0.1.0"
+authors = ["Zelda Hessler <zelda.hessler@pm.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "gunpey_lib"
+
+[[bin]]
+name = "gunpey"
+
+[dependencies]
+anyhow = "1.0.43"
+dotenv = "0.15.0"
+# https://www.youtube.com/watch?v=7nqcL0mjMjw
+druid = { git = "https://github.com/linebender/druid.git", branch = "master", features = [
+  "image",
+  "im",
+  "png",
+] }
+env_logger = "0.9.0"
+itertools = "0.10.1"
+log = "0.4.14"
+petgraph = "0.6.0"
+rand = "0.8.4"
+thiserror = "1.0.26"
