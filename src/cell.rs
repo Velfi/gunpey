@@ -1,5 +1,5 @@
-use crate::grid_pos::Adjacency;
-use crate::line_fragment::{LineFragment, LineFragmentKind};
+use crate::adjacency::{are_line_fragments_connecting, Adjacency};
+use crate::line_fragment::LineFragment;
 use druid::Data;
 
 #[derive(Debug, Clone, Copy, PartialEq, Data)]
@@ -56,104 +56,12 @@ impl Cell {
     }
 
     pub fn is_connected_to(&self, other: &Cell, adjacency: Adjacency) -> bool {
-        use Adjacency::*;
-        use LineFragmentKind::*;
-
-        // TODO I feel bad about this, please help me
-        // Some of this will be much nicer once the experimental or-patterns syntax is stabilized
-        // https://github.com/rust-lang/rust/issues/54883
-        let is_connected = match (self, other) {
+        match (self, other) {
             // If either Cell is empty, then no connection can be made
             (Cell::Empty, _) | (_, Cell::Empty) => false,
-            (Cell::Filled(lf_a), Cell::Filled(lf_b)) => match (lf_a.kind, lf_b.kind, adjacency) {
-                (_, _, Same) => unreachable!("please don't ask if a cell is connected to itself"),
-                (_, _, NotAdjacent) => false,
-                (Caret, _, AboveLeft) | (Caret, _, Above) | (Caret, _, AboveRight) => false,
-                (Caret, InvertedCaret, Below)
-                | (Caret, InvertedCaret, BelowLeft)
-                | (Caret, InvertedCaret, BelowRight) => true,
-                (Caret, InvertedCaret, Left) | (Caret, InvertedCaret, Right) => false,
-                (Caret, LeftSlash, Below)
-                | (Caret, LeftSlash, BelowRight)
-                | (Caret, LeftSlash, Left) => true,
-                (Caret, LeftSlash, BelowLeft) | (Caret, LeftSlash, Right) => false,
-                (Caret, RightSlash, Below)
-                | (Caret, RightSlash, BelowLeft)
-                | (Caret, RightSlash, Right) => true,
-                (Caret, RightSlash, Left) | (Caret, RightSlash, BelowRight) => false,
-                (Caret, Caret, BelowLeft) | (Caret, Caret, Below) | (Caret, Caret, BelowRight) => {
-                    false
-                }
-                (Caret, Caret, Left) | (Caret, Caret, Right) => true,
-
-                (InvertedCaret, _, BelowLeft)
-                | (InvertedCaret, _, Below)
-                | (InvertedCaret, _, BelowRight) => false,
-                (InvertedCaret, InvertedCaret, AboveLeft)
-                | (InvertedCaret, InvertedCaret, Above)
-                | (InvertedCaret, InvertedCaret, AboveRight) => false,
-                (InvertedCaret, InvertedCaret, Left) | (InvertedCaret, InvertedCaret, Right) => {
-                    true
-                }
-                (InvertedCaret, Caret, Above)
-                | (InvertedCaret, Caret, AboveLeft)
-                | (InvertedCaret, Caret, AboveRight) => true,
-                (InvertedCaret, Caret, Left) | (InvertedCaret, Caret, Right) => false,
-                (InvertedCaret, LeftSlash, Above)
-                | (InvertedCaret, LeftSlash, Right)
-                | (InvertedCaret, LeftSlash, AboveLeft) => true,
-                (InvertedCaret, LeftSlash, AboveRight) | (InvertedCaret, LeftSlash, Left) => false,
-                (InvertedCaret, RightSlash, Above)
-                | (InvertedCaret, RightSlash, AboveLeft)
-                | (InvertedCaret, RightSlash, Right) => true,
-                (InvertedCaret, RightSlash, Left) | (InvertedCaret, RightSlash, AboveRight) => {
-                    false
-                }
-
-                (LeftSlash, _, BelowLeft) | (LeftSlash, _, AboveRight) => false,
-                (LeftSlash, Caret, Above)
-                | (LeftSlash, Caret, AboveLeft)
-                | (LeftSlash, Caret, Right) => true,
-                (LeftSlash, Caret, Below)
-                | (LeftSlash, Caret, Left)
-                | (LeftSlash, Caret, BelowRight) => false,
-                (LeftSlash, InvertedCaret, Below)
-                | (LeftSlash, InvertedCaret, BelowRight)
-                | (LeftSlash, InvertedCaret, Left) => true,
-                (LeftSlash, InvertedCaret, Above)
-                | (LeftSlash, InvertedCaret, AboveLeft)
-                | (LeftSlash, InvertedCaret, Right) => false,
-                (LeftSlash, LeftSlash, AboveLeft) | (LeftSlash, LeftSlash, BelowRight) => true,
-                (LeftSlash, LeftSlash, _) => false,
-                (LeftSlash, RightSlash, Above)
-                | (LeftSlash, RightSlash, Below)
-                | (LeftSlash, RightSlash, Left)
-                | (LeftSlash, RightSlash, Right) => true,
-                (LeftSlash, RightSlash, AboveLeft) | (LeftSlash, RightSlash, BelowRight) => false,
-
-                (RightSlash, _, AboveLeft) | (RightSlash, _, BelowRight) => false,
-                (RightSlash, Caret, Above)
-                | (RightSlash, Caret, AboveRight)
-                | (RightSlash, Caret, Left) => true,
-                (RightSlash, Caret, Below)
-                | (RightSlash, Caret, BelowLeft)
-                | (RightSlash, Caret, Right) => false,
-                (RightSlash, InvertedCaret, Below)
-                | (RightSlash, InvertedCaret, BelowLeft)
-                | (RightSlash, InvertedCaret, Right) => true,
-                (RightSlash, InvertedCaret, Above)
-                | (RightSlash, InvertedCaret, Left)
-                | (RightSlash, InvertedCaret, AboveRight) => false,
-                (RightSlash, LeftSlash, Above)
-                | (RightSlash, LeftSlash, Below)
-                | (RightSlash, LeftSlash, Left)
-                | (RightSlash, LeftSlash, Right) => true,
-                (RightSlash, LeftSlash, AboveRight) | (RightSlash, LeftSlash, BelowLeft) => false,
-                (RightSlash, RightSlash, BelowLeft) | (RightSlash, RightSlash, AboveRight) => true,
-                (RightSlash, RightSlash, _) => false,
-            },
-        };
-
-        is_connected
+            (Cell::Filled(lf_a), Cell::Filled(lf_b)) => {
+                are_line_fragments_connecting(lf_a, adjacency, lf_b)
+            }
+        }
     }
 }

@@ -1,3 +1,4 @@
+pub mod adjacency;
 pub mod cell;
 pub mod error;
 pub mod grid;

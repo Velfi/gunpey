@@ -1,5 +1,4 @@
 use crate::cell::Cell;
-use crate::grid_pos::Adjacency;
 use crate::{
     error::GunpeyLibError,
     grid_pos::GridPos,
@@ -264,10 +263,6 @@ impl Grid {
     fn cells_are_connecting(&self, (cell_a_pos, cell_b_pos): &(GridPos, GridPos)) -> bool {
         let adjacency = cell_a_pos.adjacency(cell_b_pos);
 
-        if adjacency == Adjacency::NotAdjacent {
-            return false;
-        }
-
         match (
             self.get_index_from_pos(*cell_a_pos),
             self.get_index_from_pos(*cell_b_pos),
@@ -306,7 +301,7 @@ impl Grid {
         }
     }
 
-    pub fn pop_top_x(&mut self) -> Vector<Cell> {
+    pub fn pop_top_row(&mut self) -> Vector<Cell> {
         debug!("removing top x from grid");
         self.cells.slice(0..self.width)
     }

@@ -806,6 +806,7 @@ name = "gunpey"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags",
  "dotenv",
  "druid",
  "env_logger",

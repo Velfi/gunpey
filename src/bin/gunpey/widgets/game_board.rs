@@ -48,8 +48,8 @@ fn build_widget(app_state: &AppState) -> Box<dyn Widget<AppState>> {
 }
 
 struct GameBoardWidget {
-    rows: usize,
-    columns: usize,
+    width: usize,
+    height: usize,
     timer_id: TimerToken,
     cell_size: Size,
     last_update: Instant,
@@ -67,18 +67,18 @@ impl GameBoardWidget {
         if p.x < 0.0 || p.y < 0.0 || w0 == 0.0 || h0 == 0.0 {
             return None;
         }
-        let column = (p.x / w0) as usize;
-        let row = (p.y / h0) as usize;
-        if row >= self.rows || column >= self.columns {
+        let y = (p.x / w0) as usize;
+        let x = (p.y / h0) as usize;
+        if x >= self.height || y >= self.width {
             return None;
         }
-        Some(GridPos { row, column })
+        Some(GridPos { x, y })
     }
 
     fn cursor_pos(&self, grid: &Grid, p: Point) -> Option<(GridPos, GridPos)> {
         self.grid_pos(p)
             .map(|a_pos| {
-                let b_pos = if a_pos.row == 0 {
+                let b_pos = if a_pos.y == grid.height - 1 {
                     grid.below(a_pos)
                 } else {
                     grid.above(a_pos)
@@ -173,8 +173,8 @@ pub fn make_widget() -> impl Widget<AppState> {
             width: 52.0,
             height: 32.0,
         },
-        rows: 10,
-        columns: 5,
+        height: 10,
+        width: 5,
         last_update: Instant::now(),
         children: SizedBox::empty().boxed(),
     }
