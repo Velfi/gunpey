@@ -38,20 +38,14 @@ impl Cell {
     }
 
     pub fn activate(&mut self) {
-        match self {
-            Cell::Filled(lf) => {
-                lf.is_active = true;
-            }
-            _ => (),
+        if let Cell::Filled(lf) = self {
+            lf.is_active = true;
         }
     }
 
     pub fn deactivate(&mut self) {
-        match self {
-            Cell::Filled(lf) => {
-                lf.is_active = false;
-            }
-            _ => (),
+        if let Cell::Filled(lf) = self {
+            lf.is_active = false;
         }
     }
 

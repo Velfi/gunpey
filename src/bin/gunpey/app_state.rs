@@ -1,7 +1,9 @@
 use druid::{Data, Lens};
-use gunpey_lib::{grid::Grid, new_small_grid};
-use rand::prelude::StdRng;
-use rand::SeedableRng;
+use gunpey_lib::{
+    grid::Grid, grid_pos::GridPos, new_random_row, new_small_grid, NewRowGenerationParams,
+};
+use log::{debug, error};
+use rand::{prelude::StdRng, SeedableRng};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Data)]
@@ -47,11 +49,11 @@ impl AppState {
         }
     }
 
-    pub fn score(&self) -> usize {
+    pub fn _score(&self) -> usize {
         self.score
     }
 
-    pub fn score_points(&mut self, points: usize) {
+    pub fn _score_points(&mut self, points: usize) {
         self.score += points;
     }
 
@@ -71,6 +73,31 @@ impl AppState {
 
     pub fn iter_interval(&self) -> u64 {
         (1000. / self.updates_per_second) as u64
+    }
+
+    pub fn swap_cells(&mut self, grid_pos_a: GridPos, grid_pos_b: GridPos) {
+        debug!("Swapping tiles at {} and {}", grid_pos_a, grid_pos_b);
+
+        match self.grid.swap_cells(grid_pos_a, grid_pos_b) {
+            Ok(_) => self.grid.recalculate_active_cells(),
+            Err(err) => error!("Couldn't swap: {}", err),
+        };
+    }
+
+    pub fn cycle_grid_rows(&mut self) {
+        let new_row_params = NewRowGenerationParams {
+            width: self.grid.width,
+        };
+
+        let popped_row = self.grid.pop_top_row();
+        debug!("popped row: {:#?}", popped_row);
+
+        let rng = Arc::make_mut(&mut self.rng);
+        let new_row = new_random_row(rng, new_row_params);
+        match self.grid.push_bottom_row(new_row) {
+            Ok(_) => self.grid.recalculate_active_cells(),
+            Err(err) => error!("failed push_row_to_bottom_and_pop_row_from_top: {}", err),
+        };
     }
 }
 

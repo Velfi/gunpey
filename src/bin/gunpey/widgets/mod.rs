@@ -5,8 +5,6 @@ use druid::{
     widget::{Button, Flex, Label, ViewSwitcher, WidgetExt},
     Env, Widget,
 };
-use gunpey_lib::{new_random_row, NewRowGenerationParams};
-use log::{debug, error};
 use std::sync::Arc;
 
 pub fn root() -> impl Widget<AppState> {
@@ -40,18 +38,7 @@ pub fn game_screen() -> impl Widget<AppState> {
 
     let new_row_button = Button::new("Add new row")
         .on_click(|_ctx, data: &mut AppState, _env: &Env| {
-            let new_row_params = NewRowGenerationParams {
-                width: data.grid.width,
-            };
-
-            let popped_row = data.grid.pop_top_row();
-            debug!("popped row: {:#?}", popped_row);
-
-            let rng = Arc::make_mut(&mut data.rng);
-            let new_row = new_random_row(rng, new_row_params);
-            if let Err(err) = data.grid.push_bottom_row(new_row) {
-                error!("failed push_row_to_bottom_and_pop_row_from_top: {}", err);
-            }
+            data.cycle_grid_rows();
         })
         .padding(5.0);
 

@@ -6,7 +6,7 @@ use druid::{
 use druid::{Point, TimerToken};
 use gunpey_lib::{cell::Cell, grid::Grid, grid_pos::GridPos, line_fragment::LineFragmentKind};
 use itertools::Itertools;
-use log::{debug, error, trace};
+use log::{debug, trace};
 use std::time::{Duration, Instant};
 
 fn build_widget(app_state: &AppState) -> Box<dyn Widget<AppState>> {
@@ -22,6 +22,7 @@ fn build_widget(app_state: &AppState) -> Box<dyn Widget<AppState>> {
             for cell in row {
                 let cell = match cell {
                     Cell::Filled(line_fragment) => {
+                        debug!("creating new cell from {:?}", line_fragment);
                         match (line_fragment.is_active, line_fragment.kind) {
                             (true, LineFragmentKind::Caret) => assets::active_caret(),
                             (false, LineFragmentKind::Caret) => assets::caret(),
@@ -67,9 +68,9 @@ impl GameBoardWidget {
         if p.x < 0.0 || p.y < 0.0 || w0 == 0.0 || h0 == 0.0 {
             return None;
         }
-        let y = (p.x / w0) as usize;
-        let x = (p.y / h0) as usize;
-        if x >= self.height || y >= self.width {
+        let x = (p.x / w0) as usize;
+        let y = (p.y / h0) as usize;
+        if y >= self.height || x >= self.width {
             return None;
         }
         Some(GridPos { x, y })
@@ -108,11 +109,7 @@ impl Widget<AppState> for GameBoardWidget {
             }
             Event::MouseDown(e) => {
                 if let Some((grid_pos_a, grid_pos_b)) = self.cursor_pos(&data.grid, e.pos) {
-                    debug!("Swapping tiles at {} and {}", grid_pos_a, grid_pos_b);
-
-                    if let Err(err) = data.grid.swap_cells(grid_pos_a, grid_pos_b) {
-                        error!("Couldn't swap: {}", err);
-                    };
+                    data.swap_cells(grid_pos_a, grid_pos_b);
                 }
             }
             Event::MouseUp(e) => {

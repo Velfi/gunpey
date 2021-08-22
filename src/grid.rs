@@ -73,7 +73,7 @@ impl Grid {
         cells
             .chunks_exact(self.width)
             .rev()
-            .map(|x| x.into_iter().map(|cell| cell.is_active() as u8).collect())
+            .map(|x| x.iter().map(|cell| cell.is_active() as u8).collect())
             .collect()
     }
 
@@ -116,16 +116,10 @@ impl Grid {
         get_pos_from_index(index, self.width)
     }
 
-    // 1) Create a node graph of every connected cell
-    // 2) If no node connects to the opposite side, the graph is dead
-    //      for a group of nodes, at least one node must be connected to the left edge
-    //                        and at least one node must be connected to the right edge
-    // 3) Every node with exactly one connection and no edge connection is dead, remove from list
-    // 4) Every remaining node is live
-    fn recalculate_active_cells(&mut self) {
+    pub fn recalculate_active_cells(&mut self) {
         let edges = self.edges();
 
-        debug!("edges\n{:?}", edges);
+        trace!("recalculation active cells from edges\n{:?}", edges);
 
         let mut is_connected_to_left_edge: HashSet<GridPos> = (0..self.height)
             .map(|y| GridPos { x: 0, y })
@@ -144,15 +138,13 @@ impl Grid {
                         if is_connected_to_left_edge.insert(*gp2) {
                             change = true;
                         }
-                    } else if *gp2 == connected_gp {
-                        if is_connected_to_left_edge.insert(*gp1) {
-                            change = true;
-                        }
+                    } else if *gp2 == connected_gp && is_connected_to_left_edge.insert(*gp1) {
+                        change = true;
                     }
                 }
             }
 
-            if change == false {
+            if !change {
                 break;
             }
         }
@@ -179,23 +171,21 @@ impl Grid {
                         if is_connected_to_right_edge.insert(*gp2) {
                             change = true;
                         }
-                    } else if *gp2 == connected_gp {
-                        if is_connected_to_right_edge.insert(*gp1) {
-                            change = true;
-                        }
+                    } else if *gp2 == connected_gp && is_connected_to_right_edge.insert(*gp1) {
+                        change = true;
                     }
                 }
             }
 
-            if change == false {
+            if !change {
                 break;
             }
         }
 
         trace!("is_connected_to_right_edge loop exited");
 
-        debug!("is_connected_to_left_edge\n{:?}", is_connected_to_left_edge);
-        debug!(
+        trace!("is_connected_to_left_edge\n{:?}", is_connected_to_left_edge);
+        trace!(
             "is_connected_to_right_edge\n{:?}",
             is_connected_to_right_edge
         );
@@ -235,7 +225,10 @@ impl Grid {
             .flat_map(|(index, cell)| match cell {
                 Cell::Filled(lf) => {
                     let gp1 = self.get_pos_from_index(index);
-                    debug!("encountered filled cell at {}, calculating edges", gp1);
+                    trace!(
+                        "encountered filled cell at {} while building edge list, calculating edges",
+                        gp1
+                    );
                     let possible_edges = match lf.kind {
                         LineFragmentKind::Caret => {
                             vec![
@@ -287,10 +280,10 @@ impl Grid {
             })
             .collect();
 
-        debug!("got possible edges, {:#?}", edges);
+        trace!("got possible edges, {:#?}", edges);
 
         edges.retain(|edge| self.cells_are_connecting(edge));
-        debug!("after filtering edges for connections, {:#?}", edges);
+        trace!("after filtering edges for connections, {:#?}", edges);
 
         edges
     }
@@ -298,9 +291,11 @@ impl Grid {
     fn cells_are_connecting(&self, (cell_a_pos, cell_b_pos): &(GridPos, GridPos)) -> bool {
         let adjacency = cell_a_pos.adjacency(cell_b_pos);
 
-        debug!(
+        trace!(
             "checking connection between {} and cell to the {} at {}",
-            cell_a_pos, adjacency, cell_b_pos
+            cell_a_pos,
+            adjacency,
+            cell_b_pos
         );
 
         match (
@@ -308,14 +303,16 @@ impl Grid {
             self.get_index_from_pos(*cell_b_pos),
         ) {
             (Some(cell_a_index), Some(cell_b_index)) => {
-                debug!("calculated indexes for both cells");
+                trace!("calculated indexes for both cells");
 
                 let cell_a = self.cells.get(cell_a_index).unwrap();
                 let cell_b = self.cells.get(cell_b_index).unwrap();
 
-                debug!(
+                trace!(
                     "checking connection between {:?} and cell to the {} at {:?}",
-                    cell_a, adjacency, cell_b
+                    cell_a,
+                    adjacency,
+                    cell_b
                 );
 
                 cell_a.is_connected_to(cell_b, adjacency)
@@ -380,10 +377,9 @@ impl Grid {
     }
 
     pub fn is_cell_empty(&self, cell_pos: GridPos) -> bool {
-        let cell_index = self.get_index_from_pos(cell_pos).expect(&format!(
-            "bad grid pos {}, can't get cell::is_empty",
-            cell_pos
-        ));
+        let cell_index = self
+            .get_index_from_pos(cell_pos)
+            .unwrap_or_else(|| panic!("bad grid pos {}, can't get cell::is_empty", cell_pos));
         self.cells
             .get(cell_index)
             .map(Cell::is_empty)
@@ -688,8 +684,7 @@ mod tests {
     // #endregion
 
     #[test]
-    fn test_recalculate_active_cells_are_active() {
-        // env_logger::init();
+    fn test_recalculate_active_cells_are_active_1() {
         #[rustfmt::skip]
         let chars: CharGrid = vec![
             vec!['.','∧','.'],
@@ -712,6 +707,46 @@ mod tests {
         let expected_active: Bitmask = vec![
             vec![0, 1, 0],
             vec![1, 0, 1],
+        ];
+
+        // All should be active after recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+    }
+
+    #[test]
+    fn test_recalculate_active_cells_are_active_2() {
+        #[rustfmt::skip]
+        let chars: CharGrid = vec![
+            vec!['.','.','.','∧','.'],
+            vec!['∧','∧','/','.','\\'],
+            vec!['.','\\','\\','/','∨'],
+            vec!['.','.','∨','\\','∧'],
+            vec!['.','.','.','.','∨'],
+        ];
+        #[rustfmt::skip]
+        let expected_active: Bitmask = vec![
+            vec![0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0],
+        ];
+        let mut grid = Grid::new_from_chars(chars);
+
+        // None should be active before recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+
+        grid.recalculate_active_cells();
+
+        #[rustfmt::skip]
+        let expected_active: Bitmask = vec![
+            vec![0, 0, 0, 1, 0],
+            vec![1, 1, 1, 0, 1],
+            vec![0, 1, 1, 1, 1],
+            vec![0, 0, 1, 1, 1],
+            vec![0, 0, 0, 0, 1],
         ];
 
         // All should be active after recalculation
