@@ -1,5 +1,6 @@
 use druid::Data;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, Data, PartialEq)]
 pub enum LineFragmentKind {
@@ -7,6 +8,21 @@ pub enum LineFragmentKind {
     InvertedCaret,
     LeftSlash,
     RightSlash,
+}
+
+impl Display for LineFragmentKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LineFragmentKind::Caret => "caret",
+                LineFragmentKind::InvertedCaret => "inverted caret",
+                LineFragmentKind::LeftSlash => "left slash",
+                LineFragmentKind::RightSlash => "right slash",
+            }
+        )
+    }
 }
 
 impl LineFragmentKind {

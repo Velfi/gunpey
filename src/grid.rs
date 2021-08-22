@@ -6,7 +6,7 @@ use crate::{
 };
 use druid::{im::Vector, Data};
 use itertools::Itertools;
-use log::debug;
+use log::{debug, trace};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, Data, PartialEq)]
@@ -42,8 +42,14 @@ impl Grid {
 
         let cells = chars
             .iter()
-            .flat_map(|x| x.iter().map(Cell::from_char))
+            .rev()
+            .flat_map(|row| row.iter().map(Cell::from_char))
             .collect();
+
+        debug!(
+            "creating new grid from chars with width={}, height={}",
+            width, height
+        );
 
         Self {
             width,
@@ -62,10 +68,11 @@ impl Grid {
     }
 
     pub fn as_active_bitmask(&self) -> Bitmask {
-        self.cells
-            .iter()
-            .chunks(self.width)
-            .into_iter()
+        // im::Vector doesn't support chunks in the way I'd expect
+        let cells: Vec<_> = self.cells.iter().cloned().collect();
+        cells
+            .chunks_exact(self.width)
+            .rev()
             .map(|x| x.into_iter().map(|cell| cell.is_active() as u8).collect())
             .collect()
     }
@@ -94,8 +101,13 @@ impl Grid {
         }
     }
 
+    fn _get_cell_at_pos(&self, grid_pos: GridPos) -> Option<&Cell> {
+        self.get_index_from_pos(grid_pos)
+            .and_then(|index| self.cells.get(index))
+    }
+
     fn get_index_from_pos(&self, GridPos { x, y }: GridPos) -> Option<usize> {
-        let i = y + self.width * x;
+        let i = x + self.width * y;
 
         (0..self.cells.len()).contains(&i).then(|| i)
     }
@@ -116,19 +128,26 @@ impl Grid {
         debug!("edges\n{:?}", edges);
 
         let mut is_connected_to_left_edge: HashSet<GridPos> = (0..self.height)
-            .map(|x| GridPos { x, y: 0 })
+            .map(|y| GridPos { x: 0, y })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
 
+        let mut i = 0;
         loop {
+            trace!("loop #{}", i);
+            i += 1;
             let mut change = false;
 
             for &connected_gp in is_connected_to_left_edge.clone().iter() {
                 for (gp1, gp2) in edges.iter() {
                     if *gp1 == connected_gp {
-                        change = is_connected_to_left_edge.insert(*gp2);
+                        if is_connected_to_left_edge.insert(*gp2) {
+                            change = true;
+                        }
                     } else if *gp2 == connected_gp {
-                        change = is_connected_to_left_edge.insert(*gp1);
+                        if is_connected_to_left_edge.insert(*gp1) {
+                            change = true;
+                        }
                     }
                 }
             }
@@ -138,23 +157,32 @@ impl Grid {
             }
         }
 
+        trace!("is_connected_to_left_edge loop exited");
+
         let mut is_connected_to_right_edge: HashSet<GridPos> = (0..self.height)
-            .map(|x| GridPos {
-                x,
-                y: self.width - 1,
+            .map(|y| GridPos {
+                x: self.width - 1,
+                y,
             })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
 
+        let mut i = 0;
         loop {
+            trace!("loop #{}", i);
+            i += 1;
             let mut change = false;
 
             for &connected_gp in is_connected_to_right_edge.clone().iter() {
                 for (gp1, gp2) in edges.iter() {
                     if *gp1 == connected_gp {
-                        change = change || is_connected_to_right_edge.insert(*gp2);
+                        if is_connected_to_right_edge.insert(*gp2) {
+                            change = true;
+                        }
                     } else if *gp2 == connected_gp {
-                        change = change || is_connected_to_right_edge.insert(*gp1);
+                        if is_connected_to_right_edge.insert(*gp1) {
+                            change = true;
+                        }
                     }
                 }
             }
@@ -163,6 +191,8 @@ impl Grid {
                 break;
             }
         }
+
+        trace!("is_connected_to_right_edge loop exited");
 
         debug!("is_connected_to_left_edge\n{:?}", is_connected_to_left_edge);
         debug!(
@@ -171,7 +201,7 @@ impl Grid {
         );
 
         let active_grid_positions: HashSet<_> = is_connected_to_left_edge
-            .union(&is_connected_to_right_edge)
+            .intersection(&is_connected_to_right_edge)
             .collect();
 
         let width = self.width;
@@ -191,6 +221,8 @@ impl Grid {
                 }
             });
     }
+
+    // #region hide
 
     fn edges(&self) -> Vec<(GridPos, GridPos)> {
         let mut edges: Vec<_> = self
@@ -255,7 +287,10 @@ impl Grid {
             })
             .collect();
 
+        debug!("got possible edges, {:#?}", edges);
+
         edges.retain(|edge| self.cells_are_connecting(edge));
+        debug!("after filtering edges for connections, {:#?}", edges);
 
         edges
     }
@@ -263,13 +298,25 @@ impl Grid {
     fn cells_are_connecting(&self, (cell_a_pos, cell_b_pos): &(GridPos, GridPos)) -> bool {
         let adjacency = cell_a_pos.adjacency(cell_b_pos);
 
+        debug!(
+            "checking connection between {} and cell to the {} at {}",
+            cell_a_pos, adjacency, cell_b_pos
+        );
+
         match (
             self.get_index_from_pos(*cell_a_pos),
             self.get_index_from_pos(*cell_b_pos),
         ) {
             (Some(cell_a_index), Some(cell_b_index)) => {
+                debug!("calculated indexes for both cells");
+
                 let cell_a = self.cells.get(cell_a_index).unwrap();
                 let cell_b = self.cells.get(cell_b_index).unwrap();
+
+                debug!(
+                    "checking connection between {:?} and cell to the {} at {:?}",
+                    cell_a, adjacency, cell_b
+                );
 
                 cell_a.is_connected_to(cell_b, adjacency)
             }
@@ -333,9 +380,10 @@ impl Grid {
     }
 
     pub fn is_cell_empty(&self, cell_pos: GridPos) -> bool {
-        let cell_index = self
-            .get_index_from_pos(cell_pos)
-            .expect("bad grid pos, can't get cell::is_empty");
+        let cell_index = self.get_index_from_pos(cell_pos).expect(&format!(
+            "bad grid pos {}, can't get cell::is_empty",
+            cell_pos
+        ));
         self.cells
             .get(cell_index)
             .map(Cell::is_empty)
@@ -417,6 +465,63 @@ mod tests {
 
     fn new_2x2_grid() -> Grid {
         Grid::new_from_chars(vec![vec!['.', '.'], vec!['.', '.']])
+    }
+
+    #[test]
+    fn test_get_pos_from_index() {
+        let width = 3;
+
+        let expected = GridPos { x: 0, y: 0 };
+        let actual = get_pos_from_index(0, width);
+
+        assert_eq!(expected, actual);
+
+        let expected = GridPos { x: 2, y: 0 };
+        let actual = get_pos_from_index(2, width);
+
+        assert_eq!(expected, actual);
+
+        let expected = GridPos { x: 2, y: 1 };
+        let actual = get_pos_from_index(5, width);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_get_cell_at_pos() {
+        #[rustfmt::skip]
+        let expected_chars: CharGrid = vec![
+            vec!['.','∧','.'],
+            vec!['/','.','∨'],
+        ];
+
+        let grid = Grid::new_from_chars(expected_chars.clone());
+        let actual_chars = vec![
+            vec![
+                grid._get_cell_at_pos(GridPos { x: 0, y: 1 })
+                    .unwrap()
+                    .to_char(),
+                grid._get_cell_at_pos(GridPos { x: 1, y: 1 })
+                    .unwrap()
+                    .to_char(),
+                grid._get_cell_at_pos(GridPos { x: 2, y: 1 })
+                    .unwrap()
+                    .to_char(),
+            ],
+            vec![
+                grid._get_cell_at_pos(GridPos { x: 0, y: 0 })
+                    .unwrap()
+                    .to_char(),
+                grid._get_cell_at_pos(GridPos { x: 1, y: 0 })
+                    .unwrap()
+                    .to_char(),
+                grid._get_cell_at_pos(GridPos { x: 2, y: 0 })
+                    .unwrap()
+                    .to_char(),
+            ],
+        ];
+
+        assert_eq!(expected_chars, actual_chars);
     }
 
     //   0,0 0,1
@@ -523,31 +628,40 @@ mod tests {
     }
 
     #[test]
-    fn test_edges_should_be_detected() {
+    fn test_edges_should_be_detected_1() {
         #[rustfmt::skip]
         let chars: CharGrid = vec![
-            vec!['∧','/'],
-            vec!['∨','\\'],
+            vec!['/','/'],
+            vec!['/','/'],
         ];
         let grid = Grid::new_from_chars(chars);
         let mut expected: Vec<(GridPos, GridPos)> = vec![
-            (GridPos::new(0, 0), GridPos::new(0, 1)),
-            (GridPos::new(0, 0), GridPos::new(1, 0)),
             (GridPos::new(0, 0), GridPos::new(1, 1)),
-            (GridPos::new(1, 0), GridPos::new(0, 0)),
-            (GridPos::new(1, 0), GridPos::new(0, 1)),
-            (GridPos::new(1, 0), GridPos::new(1, 1)),
-            (GridPos::new(0, 1), GridPos::new(0, 0)),
-            (GridPos::new(0, 1), GridPos::new(1, 0)),
-            (GridPos::new(0, 1), GridPos::new(1, 1)),
             (GridPos::new(1, 1), GridPos::new(0, 0)),
-            (GridPos::new(1, 1), GridPos::new(1, 0)),
-            (GridPos::new(1, 1), GridPos::new(0, 1)),
         ];
         expected.sort();
 
         let mut actual = grid.edges();
         actual.sort();
+
+        assert_eq!(expected, actual)
+    }
+
+    #[test]
+    fn test_edges_should_be_detected_2() {
+        #[rustfmt::skip]
+        let chars: CharGrid = vec![
+            vec!['∨','∨'],
+            vec!['∧','∧'],
+        ];
+        let grid = Grid::new_from_chars(chars);
+        let expected: Vec<(GridPos, GridPos)> = vec![
+            (GridPos::new(0, 0), GridPos::new(1, 0)),
+            (GridPos::new(1, 0), GridPos::new(0, 0)),
+            (GridPos::new(0, 1), GridPos::new(1, 1)),
+            (GridPos::new(1, 1), GridPos::new(0, 1)),
+        ];
+        let actual = grid.edges();
 
         assert_eq!(expected, actual)
     }
@@ -571,24 +685,37 @@ mod tests {
     // '\\'
     // '/'
 
+    // #endregion
+
     #[test]
-    fn test_recalculate_active_cells_all_active() {
+    fn test_recalculate_active_cells_are_active() {
         // env_logger::init();
         #[rustfmt::skip]
         let chars: CharGrid = vec![
-            vec!['\\','/'],
-            vec!['/','\\'],
+            vec!['.','∧','.'],
+            vec!['/','.','∨'],
+        ];
+        #[rustfmt::skip]
+        let expected_active: Bitmask = vec![
+            vec![0, 0, 0],
+            vec![0, 0, 0],
         ];
         let mut grid = Grid::new_from_chars(chars);
+
+        // None should be active before recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+
         grid.recalculate_active_cells();
 
         #[rustfmt::skip]
         let expected_active: Bitmask = vec![
-            vec![1,1],
-            vec![1,1],
+            vec![0, 1, 0],
+            vec![1, 0, 1],
         ];
-        let actual_active = grid.as_active_bitmask();
 
+        // All should be active after recalculation
+        let actual_active = grid.as_active_bitmask();
         assert_eq!(expected_active, actual_active);
     }
 
@@ -596,19 +723,25 @@ mod tests {
     fn test_recalculate_active_cells_all_inactive() {
         #[rustfmt::skip]
         let chars: CharGrid = vec![
-            vec!['∨','/'],
-            vec!['∧','\\'],
+            vec!['/','.'],
+            vec!['.','/'],
         ];
-        let mut grid = Grid::new_from_chars(chars);
-        grid.recalculate_active_cells();
-
         #[rustfmt::skip]
         let expected_active: Bitmask = vec![
             vec![0,0],
             vec![0,0],
         ];
-        let actual_active = grid.as_active_bitmask();
 
+        let mut grid = Grid::new_from_chars(chars);
+
+        // None should be active before recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+
+        grid.recalculate_active_cells();
+
+        // None should be active after recalculation either
+        let actual_active = grid.as_active_bitmask();
         assert_eq!(expected_active, actual_active);
     }
 }
