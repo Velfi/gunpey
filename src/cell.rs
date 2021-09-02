@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::adjacency::{are_line_fragments_connecting, Adjacency};
 use crate::line_fragment::LineFragment;
 use druid::Data;
@@ -15,25 +17,40 @@ impl Cell {
 
     pub fn is_active(&self) -> bool {
         match self {
-            Cell::Filled(LineFragment { is_active, .. }) => *is_active,
             Cell::Empty => false,
+            Cell::Filled(LineFragment { is_active, .. }) => *is_active,
         }
     }
 
     pub fn to_char(&self) -> char {
         match self {
-            Cell::Filled(lf) => lf.to_char(),
             Cell::Empty => '.',
+            Cell::Filled(lf) => lf.to_char(),
+        }
+    }
+
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Cell::Empty => ".",
+            Cell::Filled(lf) => lf.to_str(),
         }
     }
 
     pub fn from_char(c: &char) -> Self {
-        match c {
-            '.' => Cell::Empty,
-            c => {
-                let lf = LineFragment::from_char(c);
-                Cell::Filled(lf)
-            }
+        if *c == '.' {
+            Cell::Empty
+        } else {
+            let lf = LineFragment::from_char(c);
+            Cell::Filled(lf)
+        }
+    }
+
+    pub fn from_str(cell_str: &str) -> Self {
+        if cell_str == "." {
+            Cell::Empty
+        } else {
+            let lf = LineFragment::from_str(cell_str);
+            Cell::Filled(lf)
         }
     }
 
@@ -57,5 +74,18 @@ impl Cell {
                 are_line_fragments_connecting(lf_a, adjacency, lf_b)
             }
         }
+    }
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &Cell::Empty => ".",
+                &Cell::Filled(lf) => lf.to_str(),
+            }
+        )
     }
 }

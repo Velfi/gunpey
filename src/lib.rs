@@ -2,6 +2,7 @@ pub mod adjacency;
 pub mod cell;
 pub mod error;
 pub mod grid;
+pub mod grid_iterator_2d;
 pub mod grid_pos;
 pub mod line_fragment;
 

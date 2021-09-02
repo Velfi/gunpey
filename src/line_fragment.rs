@@ -74,8 +74,39 @@ impl LineFragment {
         }
     }
 
+    pub fn from_str(lf_str: &str) -> Self {
+        let (is_active, kind) = match lf_str {
+            "C" => (true, LineFragmentKind::Caret),
+            "c" => (false, LineFragmentKind::Caret),
+            "I" => (true, LineFragmentKind::InvertedCaret),
+            "i" => (false, LineFragmentKind::InvertedCaret),
+            "L" => (true, LineFragmentKind::LeftSlash),
+            "l" => (false, LineFragmentKind::LeftSlash),
+            "R" => (true, LineFragmentKind::RightSlash),
+            "r" => (false, LineFragmentKind::RightSlash),
+            _ => unreachable!(r#"invalid lf_str "{}""#, lf_str),
+        };
+
+        Self { is_active, kind }
+    }
+
     pub fn to_char(&self) -> char {
         self.kind.to_char()
+    }
+
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            &LineFragment { is_active, kind } => match kind {
+                LineFragmentKind::Caret if is_active => "C",
+                LineFragmentKind::Caret => "c",
+                LineFragmentKind::InvertedCaret if is_active => "I",
+                LineFragmentKind::InvertedCaret => "i",
+                LineFragmentKind::LeftSlash if is_active => "L",
+                LineFragmentKind::LeftSlash => "l",
+                LineFragmentKind::RightSlash if is_active => "R",
+                LineFragmentKind::RightSlash => "r",
+            },
+        }
     }
 }
 

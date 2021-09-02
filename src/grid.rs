@@ -5,9 +5,9 @@ use crate::{
     line_fragment::{LineFragment, LineFragmentKind},
 };
 use druid::{im::Vector, Data};
-use itertools::Itertools;
 use log::{debug, trace};
 use std::collections::HashSet;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Data, PartialEq)]
 pub struct Grid {
@@ -26,6 +26,32 @@ impl Grid {
 
         let length = width * height;
         let cells = (0..length).map(|_| Cell::Empty).collect();
+
+        Self {
+            width,
+            height,
+            cells,
+        }
+    }
+
+    pub fn new_from_str(grid_str: &str) -> Self {
+        let rows: Vec<_> = grid_str.trim().split("\n").map(str::trim).collect();
+
+        let width = rows[0].len();
+        let height = rows.len();
+        assert!(width > 0, "width of new Grid must be greater than 0!");
+        assert!(height > 1, "height of new Grid must be greater than 1!");
+
+        let cells = rows
+            .iter()
+            .rev()
+            .flat_map(|row| row.split("").filter(|&c| !c.is_empty()).map(Cell::from_str))
+            .collect();
+
+        debug!(
+            "creating new grid from str with width={}, height={}",
+            width, height
+        );
 
         Self {
             width,
@@ -59,11 +85,9 @@ impl Grid {
     }
 
     pub fn as_chars(&self) -> CharGrid {
-        self.cells
-            .iter()
-            .chunks(self.width)
+        self.cell_rows_in_render_order()
             .into_iter()
-            .map(|x| x.into_iter().map(Cell::to_char).collect())
+            .map(|x| x.iter().map(Cell::to_char).collect())
             .collect()
     }
 
@@ -74,6 +98,15 @@ impl Grid {
             .chunks_exact(self.width)
             .rev()
             .map(|x| x.iter().map(|cell| cell.is_active() as u8).collect())
+            .collect()
+    }
+
+    pub fn cell_rows_in_render_order(&self) -> Vec<Vec<Cell>> {
+        let cells: Vec<_> = self.cells.iter().cloned().collect();
+        cells
+            .chunks_exact(self.width)
+            .rev()
+            .map(|row| row.to_vec())
             .collect()
     }
 
@@ -210,6 +243,11 @@ impl Grid {
                     cell.deactivate()
                 }
             });
+
+        trace!(
+            "state of grid after recalculation of active cells:\n{}",
+            self
+        );
     }
 
     // #region hide
@@ -347,16 +385,22 @@ impl Grid {
 
     pub fn pop_top_row(&mut self) -> Vector<Cell> {
         debug!("removing top x from grid");
-        self.cells.slice(0..self.width)
+        let y = self.height - 1;
+        let start_of_last_row = y * self.width;
+        let end_of_last_row = self.cells.len();
+        let popped_row = self.cells.slice(start_of_last_row..end_of_last_row);
+
+        popped_row
     }
 
-    pub fn push_bottom_row(&mut self, new_row: Vector<Cell>) -> Result<(), GunpeyLibError> {
+    pub fn push_bottom_row(&mut self, mut new_row: Vector<Cell>) -> Result<(), GunpeyLibError> {
         if new_row.len() != self.width {
             return Err(GunpeyLibError::InvalidRowLength(new_row.len(), self.width));
         }
 
         debug!("pushing new x to bottom of grid");
-        self.cells.append(new_row);
+        new_row.append(self.cells.clone());
+        self.cells = new_row;
 
         self.recalculate_active_cells();
 
@@ -447,6 +491,19 @@ impl Grid {
     }
 }
 
+impl Display for Grid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in self.cell_rows_in_render_order() {
+            for cell in row {
+                write!(f, "{}", cell)?;
+            }
+            writeln!(f, "")?;
+        }
+
+        Ok(())
+    }
+}
+
 fn get_pos_from_index(index: usize, width: usize) -> GridPos {
     let x = index % width;
     let y = index / width;
@@ -457,10 +514,15 @@ fn get_pos_from_index(index: usize, width: usize) -> GridPos {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use druid::im::vector;
     use pretty_assertions::assert_eq;
 
     fn new_2x2_grid() -> Grid {
         Grid::new_from_chars(vec![vec!['.', '.'], vec!['.', '.']])
+    }
+
+    fn bitmask_from_str(_bitmask_str: &str) -> Bitmask {
+        todo!()
     }
 
     #[test]
@@ -778,5 +840,69 @@ mod tests {
         // None should be active after recalculation either
         let actual_active = grid.as_active_bitmask();
         assert_eq!(expected_active, actual_active);
+    }
+
+    #[test]
+    fn test_recalculate_active_cells_1() {
+        let mut grid = Grid::new_from_str(
+            r#"
+        .....
+        .....
+        .....
+        .....
+        .....
+        .....
+        .....
+        .....
+        .crlr
+        ic...
+        "#,
+        );
+
+        let expected_active = bitmask_from_str(
+            r#"
+        00000
+        00000
+        00000
+        00000
+        00000
+        00000
+        00000
+        00000
+        00000
+        01111
+        10000
+        "#,
+        );
+
+        // None should be active before recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+
+        grid.recalculate_active_cells();
+
+        // None should be active after recalculation either
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+    }
+
+    #[test]
+    fn test_pop_top_row() {
+        let mut grid = Grid::new_from_str(
+            r#"
+        .cc
+        .l.
+        ..l
+        "#,
+        );
+
+        let expected_popped_row = vector![
+            Cell::Empty,
+            Cell::Filled(LineFragment::from_str("c")),
+            Cell::Filled(LineFragment::from_str("c"))
+        ];
+        let actual_popped_row = grid.pop_top_row();
+
+        assert_eq!(expected_popped_row, actual_popped_row);
     }
 }

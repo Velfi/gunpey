@@ -5,7 +5,6 @@ use druid::{
 };
 use druid::{Point, TimerToken};
 use gunpey_lib::{cell::Cell, grid::Grid, grid_pos::GridPos, line_fragment::LineFragmentKind};
-use itertools::Itertools;
 use log::{debug, trace};
 use std::time::{Duration, Instant};
 
@@ -13,9 +12,7 @@ fn build_widget(app_state: &AppState) -> Box<dyn Widget<AppState>> {
     let mut container = Flex::column();
     app_state
         .grid
-        .cells
-        .iter()
-        .chunks(app_state.grid.width)
+        .cell_rows_in_render_order()
         .into_iter()
         .for_each(|row| {
             let mut child = Flex::row();
@@ -69,11 +66,15 @@ impl GameBoardWidget {
             return None;
         }
         let x = (p.x / w0) as usize;
-        let y = (p.y / h0) as usize;
+        // Grid is rendered top to bottom so flipping the y value is necessary
+        let y = (self.height - 1) - (p.y / h0) as usize;
         if y >= self.height || x >= self.width {
             return None;
         }
-        Some(GridPos { x, y })
+
+        let gp = GridPos { x, y };
+
+        Some(gp)
     }
 
     fn cursor_pos(&self, grid: &Grid, p: Point) -> Option<(GridPos, GridPos)> {
