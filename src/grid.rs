@@ -1,4 +1,4 @@
-use crate::adjacency::Adjacency;
+use crate::adjacency::{adjacency_of_grid_positions, Adjacency};
 use crate::cell::Cell;
 use crate::grid_algorithms::index_to_corner_nodes;
 use crate::grid_iterator_2d::{new_xy_iter, GridIterDirectionX, GridIterDirectionY};
@@ -8,10 +8,10 @@ use crate::{
     grid_pos::GridPos,
     line_fragment::{LineFragment, LineFragmentKind},
 };
-use druid::im::HashMap;
 use druid::{im::Vector, Data};
 use log::{debug, trace};
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Data, PartialEq)]
@@ -125,8 +125,8 @@ impl Grid {
         }
 
         match (
-            self.get_index_from_pos(cell_pos_a),
-            self.get_index_from_pos(cell_pos_b),
+            self.get_index_from_pos(&cell_pos_a),
+            self.get_index_from_pos(&cell_pos_b),
         ) {
             (Some(cell_index_a), Some(cell_index_b)) => {
                 let res = self.swap_cells_by_index(cell_index_a, cell_index_b);
@@ -139,7 +139,7 @@ impl Grid {
         }
     }
 
-    pub fn set_cell(&mut self, grid_pos: GridPos, cell: Cell) {
+    pub fn set_cell(&mut self, grid_pos: &GridPos, cell: Cell) {
         if let Some(current_cell) = self
             .get_index_from_pos(grid_pos)
             .and_then(|i| self.cells.get_mut(i))
@@ -149,12 +149,20 @@ impl Grid {
         }
     }
 
-    pub fn get_cell_at_pos(&self, grid_pos: GridPos) -> Option<&Cell> {
+    pub fn get_cell_at_pos(&self, grid_pos: &GridPos) -> Option<&Cell> {
         self.get_index_from_pos(grid_pos)
             .and_then(|index| self.cells.get(index))
     }
 
-    pub fn get_index_from_pos(&self, GridPos { x, y }: GridPos) -> Option<usize> {
+    pub fn get_mut_cell_at_pos(&mut self, grid_pos: &GridPos) -> Option<&mut Cell> {
+        if let Some(index) = self.get_index_from_pos(grid_pos) {
+            self.cells.get_mut(index)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_index_from_pos(&self, GridPos { x, y }: &GridPos) -> Option<usize> {
         let i = x + self.width as isize * y;
 
         (0..self.cells.len() as isize)
@@ -176,7 +184,7 @@ impl Grid {
                 x: 0,
                 y: y as isize,
             })
-            .filter(|gp| !self.is_cell_empty(*gp))
+            .filter(|gp| !self.is_cell_empty(gp))
             .collect();
 
         let mut i = 0;
@@ -209,7 +217,7 @@ impl Grid {
                 x: self.width as isize - 1,
                 y: y as isize,
             })
-            .filter(|gp| !self.is_cell_empty(*gp))
+            .filter(|gp| !self.is_cell_empty(gp))
             .collect();
 
         let mut i = 0;
@@ -335,15 +343,150 @@ impl Grid {
             break 'nodes;
         }
 
+        let mut cell_statuses: HashMap<GridPos, RefCell<CellStatus>> = HashMap::new();
+
         'cells: for (index, cell) in self.cells.iter_mut().enumerate() {
             let cell_pos = get_pos_from_index(index, self.width);
-            for node in cell.corner_nodes(&cell_pos) {
+            if cell.is_empty() {
+                cell_statuses.insert(
+                    cell_pos,
+                    RefCell::new(CellStatus {
+                        is_connected_to_left_edge: false,
+                        is_connected_to_right_edge: false,
+                        is_part_of_a_chain: false,
+                        cell_index: index,
+                    }),
+                );
+
+                continue 'cells;
+            }
+
+            let corner_nodes = cell.corner_nodes(&cell_pos);
+            for node in corner_nodes {
                 if !nodes.contains(&node) {
                     cell.deactivate();
+                    cell_statuses.insert(
+                        cell_pos,
+                        RefCell::new(CellStatus {
+                            is_connected_to_left_edge: false,
+                            is_connected_to_right_edge: false,
+                            is_part_of_a_chain: false,
+                            cell_index: index,
+                        }),
+                    );
+
                     continue 'cells;
                 }
             }
-            cell.activate();
+
+            cell_statuses.insert(
+                cell_pos,
+                RefCell::new(CellStatus {
+                    is_connected_to_left_edge: false,
+                    is_connected_to_right_edge: false,
+                    is_part_of_a_chain: true,
+                    cell_index: index,
+                }),
+            );
+        }
+
+        debug!("cell_statuses={:#?}", cell_statuses);
+
+        'edgeChecks: loop {
+            let mut had_changes = false;
+            for (cell_pos, cell_status) in cell_statuses.iter() {
+                if !cell_status.borrow().is_part_of_a_chain {
+                    continue;
+                }
+
+                let cell = self.get_cell_at_pos(cell_pos).unwrap();
+                let neighbors = if cell_pos.x == 0 {
+                    vec![
+                        self.above_right(*cell_pos),
+                        self.right(*cell_pos),
+                        self.below_right(*cell_pos),
+                    ]
+                } else if cell_pos.x == (self.width - 1) as isize {
+                    vec![
+                        self.left(*cell_pos),
+                        self.above_left(*cell_pos),
+                        self.below_left(*cell_pos),
+                    ]
+                } else {
+                    vec![
+                        self.left(*cell_pos),
+                        self.above_left(*cell_pos),
+                        self.above(*cell_pos),
+                        self.above_right(*cell_pos),
+                        self.right(*cell_pos),
+                        self.below_right(*cell_pos),
+                        self.below(*cell_pos),
+                        self.below_left(*cell_pos),
+                    ]
+                };
+
+                let connected_neighbors: Vec<_> = neighbors
+                    .into_iter()
+                    .filter_map(|neighboring_pos| neighboring_pos)
+                    .filter_map(|neighboring_pos| {
+                        if let Some(neighboring_cell) = self.get_cell_at_pos(&neighboring_pos) {
+                            Some((neighboring_pos, neighboring_cell))
+                        } else {
+                            None
+                        }
+                    })
+                    .filter(|(neighboring_pos, neighboring_cell)| {
+                        let adjacency = adjacency_of_grid_positions(*cell_pos, *neighboring_pos);
+
+                        cell.is_connected_to(neighboring_cell, adjacency)
+                    })
+                    .collect();
+
+                debug!("");
+
+                // where "cell.connected_neighbors" is all neighbor cells that share a vertex,
+                // UNLESS that vertex is on the left or right borders
+                if !cell_status.borrow().is_connected_to_left_edge {
+                    if connected_neighbors.iter().any(|(neighboring_pos, _)| {
+                        cell_statuses
+                            .get(neighboring_pos)
+                            .map(|status| status.borrow().is_connected_to_left_edge)
+                            .unwrap_or_default()
+                    }) || cell_pos.x == 0
+                    {
+                        cell_status.borrow_mut().is_connected_to_left_edge = true;
+                        had_changes = true;
+                    }
+                }
+
+                if !cell_status.borrow().is_connected_to_right_edge {
+                    if connected_neighbors.iter().any(|(neighboring_pos, _)| {
+                        cell_statuses
+                            .get(neighboring_pos)
+                            .map(|status| status.borrow().is_connected_to_right_edge)
+                            .unwrap_or_default()
+                    }) || cell_pos.x == (self.width - 1) as isize
+                    {
+                        cell_status.borrow_mut().is_connected_to_right_edge = true;
+                        had_changes = true;
+                    }
+                }
+            }
+
+            if !had_changes {
+                break;
+            }
+        }
+
+        for (cell_pos, cell_status) in cell_statuses.iter() {
+            let cell = self.get_mut_cell_at_pos(cell_pos).unwrap();
+            let cell_status = cell_status.borrow();
+
+            if cell_status.is_connected_to_left_edge && cell_status.is_connected_to_right_edge {
+                cell.activate();
+            } else {
+                cell.deactivate();
+            }
         }
     }
 
@@ -457,8 +600,8 @@ impl Grid {
         );
 
         match (
-            self.get_index_from_pos(*cell_a_pos),
-            self.get_index_from_pos(*cell_b_pos),
+            self.get_index_from_pos(cell_a_pos),
+            self.get_index_from_pos(cell_b_pos),
         ) {
             (Some(cell_a_index), Some(cell_b_index)) => {
                 trace!("calculated indexes for both cells");
@@ -516,7 +659,7 @@ impl Grid {
             return false;
         };
 
-        let cell = self.get_cell_at_pos(*cell_pos).unwrap();
+        let cell = self.get_cell_at_pos(cell_pos).unwrap();
         if !cell.has_corner_node(cell_pos, node_pos) {
             return false;
         };
@@ -556,7 +699,7 @@ impl Grid {
         Ok(())
     }
 
-    pub fn is_cell_active(&self, cell_pos: GridPos) -> bool {
+    pub fn is_cell_active(&self, cell_pos: &GridPos) -> bool {
         let cell_index = self
             .get_index_from_pos(cell_pos)
             .expect("bad grid pos, can't get cell::is_active");
@@ -569,7 +712,7 @@ impl Grid {
             .unwrap_or_default()
     }
 
-    pub fn is_cell_empty(&self, cell_pos: GridPos) -> bool {
+    pub fn is_cell_empty(&self, cell_pos: &GridPos) -> bool {
         let cell_index = self
             .get_index_from_pos(cell_pos)
             .unwrap_or_else(|| panic!("bad grid pos {}, can't get cell::is_empty", cell_pos));
@@ -660,6 +803,14 @@ pub fn get_pos_from_index(index: usize, width: usize) -> GridPos {
     GridPos { x, y }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CellStatus {
+    pub is_connected_to_left_edge: bool,
+    pub is_connected_to_right_edge: bool,
+    pub is_part_of_a_chain: bool,
+    pub cell_index: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -703,42 +854,12 @@ mod tests {
             "#,
         );
 
-        assert_eq!(
-            ".",
-            grid.get_cell_at_pos(GridPos { x: 0, y: 1 })
-                .unwrap()
-                .to_str()
-        );
-        assert_eq!(
-            "c",
-            grid.get_cell_at_pos(GridPos { x: 1, y: 1 })
-                .unwrap()
-                .to_str()
-        );
-        assert_eq!(
-            ".",
-            grid.get_cell_at_pos(GridPos { x: 2, y: 1 })
-                .unwrap()
-                .to_str()
-        );
-        assert_eq!(
-            "r",
-            grid.get_cell_at_pos(GridPos { x: 0, y: 0 })
-                .unwrap()
-                .to_str()
-        );
-        assert_eq!(
-            ".",
-            grid.get_cell_at_pos(GridPos { x: 1, y: 0 })
-                .unwrap()
-                .to_str()
-        );
-        assert_eq!(
-            "i",
-            grid.get_cell_at_pos(GridPos { x: 2, y: 0 })
-                .unwrap()
-                .to_str()
-        );
+        assert_eq!(".", grid.get_cell_at_pos(&gp(0, 1)).unwrap().to_str());
+        assert_eq!("c", grid.get_cell_at_pos(&gp(1, 1)).unwrap().to_str());
+        assert_eq!(".", grid.get_cell_at_pos(&gp(2, 1)).unwrap().to_str());
+        assert_eq!("r", grid.get_cell_at_pos(&gp(0, 0)).unwrap().to_str());
+        assert_eq!(".", grid.get_cell_at_pos(&gp(1, 0)).unwrap().to_str());
+        assert_eq!("i", grid.get_cell_at_pos(&gp(2, 0)).unwrap().to_str());
     }
 
     //   0,0 0,1
@@ -997,8 +1118,8 @@ mod tests {
 
         #[rustfmt::skip]
         let expected_active: Bitmask = vec![
-            vec![0, 1, 1],
-            vec![1, 0, 0],
+            vec![0, 0, 1],
+            vec![1, 1, 0],
         ];
 
         // Connected cells should be active after recalculation

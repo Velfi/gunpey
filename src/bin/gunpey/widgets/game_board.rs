@@ -113,12 +113,12 @@ impl Widget<AppState> for GameBoardWidget {
                     match e.button {
                         MouseButton::Right => {
                             if let Some(grid_pos) = self.grid_pos(e.pos) {
-                                data.grid.set_cell(grid_pos, Cell::Empty);
+                                data.grid.set_cell(&grid_pos, Cell::Empty);
                             }
                         }
                         MouseButton::Left => {
                             if let Some(grid_pos) = self.grid_pos(e.pos) {
-                                let cell = match data.grid.get_cell_at_pos(grid_pos).unwrap() {
+                                let cell = match data.grid.get_cell_at_pos(&grid_pos).unwrap() {
                                     Cell::Filled(LineFragment { kind, .. }) => match kind {
                                         LineFragmentKind::Caret => Cell::from_str("i"),
                                         LineFragmentKind::InvertedCaret => Cell::from_str("l"),
@@ -128,7 +128,7 @@ impl Widget<AppState> for GameBoardWidget {
                                     Cell::Empty => Cell::from_str("c"),
                                 };
 
-                                data.grid.set_cell(grid_pos, cell);
+                                data.grid.set_cell(&grid_pos, cell);
                             }
                         }
                         _ => (),
