@@ -221,10 +221,10 @@ impl World {
             return None;
         }
 
-        let x = (p.x / CELL_SIZE as f32) as usize;
-        let y = (p.y / CELL_SIZE as f32) as usize;
+        let x = (p.x / CELL_SIZE as f32) as isize;
+        let y = (p.y / CELL_SIZE as f32) as isize;
 
-        if y >= game_grid_rect.bottom() as usize || x >= game_grid_rect.right() as usize {
+        if y >= game_grid_rect.bottom() as isize || x >= game_grid_rect.right() as isize {
             None
         } else {
             Some(GridPos { x, y })
@@ -234,7 +234,7 @@ impl World {
     fn cursor_pos(&self, p: Pos2) -> Option<(GridPos, GridPos)> {
         self.grid_pos(p)
             .map(|a_pos| {
-                let b_pos = if a_pos.y == self.grid.height - 1 {
+                let b_pos = if a_pos.y == self.grid.height as isize - 1 {
                     self.grid.below(a_pos)
                 } else {
                     self.grid.above(a_pos)
