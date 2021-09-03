@@ -1271,7 +1271,6 @@ dependencies = [
  "line_drawing",
  "log",
  "nalgebra",
- "petgraph",
  "pixels",
  "pretty_assertions",
  "rand",
@@ -2185,8 +2184,9 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pixels"
-version = "0.5.0"
-source = "git+https://github.com/parasyte/pixels.git?rev=13bec725088cb36c0b20a4b8c4574bbf7c815b1b#13bec725088cb36c0b20a4b8c4574bbf7c815b1b"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e794d4eab6519352618cca630ce4970a65576b9df54eca2068d4aad4b143903"
 dependencies = [
  "bytemuck",
  "pollster",

@@ -23,14 +23,15 @@ impl Test {
     }
 }
 
-#[derive(Clone, Data)]
+#[derive(Clone, Data, Lens)]
 pub struct AppState {
     pub grid: Grid,
     pub rng: Arc<StdRng>,
     pub test: Arc<Test>,
     score: usize,
-    current_view: View,
+    view: View,
     pub updates_per_second: f64,
+    pub paint_mode: bool,
 }
 
 impl AppState {
@@ -40,12 +41,13 @@ impl AppState {
         let rng = Arc::new(SeedableRng::from_entropy());
 
         Self {
-            current_view: View::Start,
+            view: View::Start,
             grid,
             rng,
             score: 0,
             test,
             updates_per_second: 60.0,
+            paint_mode: true,
         }
     }
 
@@ -63,12 +65,7 @@ impl AppState {
 
     /// Set the app state's current view.
     pub fn set_current_view(&mut self, view: View) {
-        self.current_view = view;
-    }
-
-    /// Get a reference to the app state's current view.
-    pub fn current_view(&self) -> View {
-        self.current_view
+        self.view = view;
     }
 
     pub fn iter_interval(&self) -> u64 {
@@ -98,6 +95,11 @@ impl AppState {
             Ok(_) => self.grid.recalculate_active_cells(),
             Err(err) => error!("failed push_row_to_bottom_and_pop_row_from_top: {}", err),
         };
+    }
+
+    /// Get a reference to the app state's current view.
+    pub fn current_view(&self) -> &View {
+        &self.view
     }
 }
 

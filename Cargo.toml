@@ -35,9 +35,8 @@ itertools = "0.10.1"
 line_drawing = "1.0.0"
 log = "0.4.14"
 nalgebra = "0.29.0"
-petgraph = "0.6.0"
 # TODO waiting for this PR to get merged https://github.com/parasyte/pixels/pull/18
-pixels = { git = "https://github.com/parasyte/pixels.git", rev = "13bec725088cb36c0b20a4b8c4574bbf7c815b1b" }
+pixels = "0.6.0"
 pretty_assertions = "0.7.2"
 rand = "0.8.4"
 thiserror = "1.0.26"

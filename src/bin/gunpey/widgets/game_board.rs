@@ -3,7 +3,9 @@ use druid::{
     widget::{prelude::*, Flex, SizedBox, WidgetExt},
     Widget,
 };
-use druid::{Point, TimerToken};
+use druid::{MouseButton, Point, TimerToken};
+use gunpey_lib::grid_pos::gp;
+use gunpey_lib::line_fragment::LineFragment;
 use gunpey_lib::{cell::Cell, grid::Grid, grid_pos::GridPos, line_fragment::LineFragmentKind};
 use log::{debug, trace};
 use std::time::{Duration, Instant};
@@ -19,7 +21,7 @@ fn build_widget(app_state: &AppState) -> Box<dyn Widget<AppState>> {
             for cell in row {
                 let cell = match cell {
                     Cell::Filled(line_fragment) => {
-                        debug!("creating new cell from {:?}", line_fragment);
+                        trace!("creating new cell from {:?}", line_fragment);
                         match (line_fragment.is_active, line_fragment.kind) {
                             (true, LineFragmentKind::Caret) => assets::active_caret(),
                             (false, LineFragmentKind::Caret) => assets::caret(),
@@ -72,15 +74,13 @@ impl GameBoardWidget {
             return None;
         }
 
-        let gp = GridPos { x, y };
-
-        Some(gp)
+        Some(gp(x as isize, y as isize))
     }
 
     fn cursor_pos(&self, grid: &Grid, p: Point) -> Option<(GridPos, GridPos)> {
         self.grid_pos(p)
             .map(|a_pos| {
-                let b_pos = if a_pos.y == grid.height - 1 {
+                let b_pos = if a_pos.y == grid.height as isize - 1 {
                     grid.below(a_pos)
                 } else {
                     grid.above(a_pos)
@@ -109,8 +109,34 @@ impl Widget<AppState> for GameBoardWidget {
                 }
             }
             Event::MouseDown(e) => {
-                if let Some((grid_pos_a, grid_pos_b)) = self.cursor_pos(&data.grid, e.pos) {
-                    data.swap_cells(grid_pos_a, grid_pos_b);
+                if data.paint_mode {
+                    match e.button {
+                        MouseButton::Right => {
+                            if let Some(grid_pos) = self.grid_pos(e.pos) {
+                                data.grid.set_cell(grid_pos, Cell::Empty);
+                            }
+                        }
+                        MouseButton::Left => {
+                            if let Some(grid_pos) = self.grid_pos(e.pos) {
+                                let cell = match data.grid.get_cell_at_pos(grid_pos).unwrap() {
+                                    Cell::Filled(LineFragment { kind, .. }) => match kind {
+                                        LineFragmentKind::Caret => Cell::from_str("i"),
+                                        LineFragmentKind::InvertedCaret => Cell::from_str("l"),
+                                        LineFragmentKind::LeftSlash => Cell::from_str("r"),
+                                        LineFragmentKind::RightSlash => Cell::from_str("."),
+                                    },
+                                    Cell::Empty => Cell::from_str("c"),
+                                };
+
+                                data.grid.set_cell(grid_pos, cell);
+                            }
+                        }
+                        _ => (),
+                    }
+                } else {
+                    if let Some((grid_pos_a, grid_pos_b)) = self.cursor_pos(&data.grid, e.pos) {
+                        data.swap_cells(grid_pos_a, grid_pos_b);
+                    }
                 }
             }
             Event::MouseUp(e) => {

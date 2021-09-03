@@ -1,18 +1,23 @@
 use crate::adjacency::Adjacency;
 use std::fmt::{Debug, Display};
+use std::ops::{Add, Sub};
+
+pub fn gp(x: isize, y: isize) -> GridPos {
+    GridPos::new(x, y)
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct GridPos {
-    pub y: usize,
-    pub x: usize,
+    pub y: isize,
+    pub x: isize,
 }
 
 impl GridPos {
-    pub fn new(x: usize, y: usize) -> Self {
+    pub fn new(x: isize, y: isize) -> Self {
         Self { x, y }
     }
 
-    pub fn to_tuple(self) -> (usize, usize) {
+    pub fn to_tuple(self) -> (isize, isize) {
         let GridPos { y, x } = self;
         (x, y)
     }
@@ -46,6 +51,28 @@ impl Debug for GridPos {
 impl Display for GridPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(x: {}, y: {})", self.x, self.y)
+    }
+}
+
+impl Add for GridPos {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        GridPos {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Sub for GridPos {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        GridPos {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
     }
 }
 

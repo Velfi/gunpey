@@ -1,9 +1,14 @@
+use crate::adjacency::Adjacency;
 use crate::cell::Cell;
+use crate::grid_algorithms::index_to_corner_nodes;
+use crate::grid_iterator_2d::{new_xy_iter, GridIterDirectionX, GridIterDirectionY};
+use crate::grid_pos::gp;
 use crate::{
     error::GunpeyLibError,
     grid_pos::GridPos,
     line_fragment::{LineFragment, LineFragmentKind},
 };
+use druid::im::HashMap;
 use druid::{im::Vector, Data};
 use log::{debug, trace};
 use std::collections::HashSet;
@@ -134,28 +139,43 @@ impl Grid {
         }
     }
 
-    fn _get_cell_at_pos(&self, grid_pos: GridPos) -> Option<&Cell> {
+    pub fn set_cell(&mut self, grid_pos: GridPos, cell: Cell) {
+        if let Some(current_cell) = self
+            .get_index_from_pos(grid_pos)
+            .and_then(|i| self.cells.get_mut(i))
+        {
+            *current_cell = cell;
+            self.recalculate_active_cells();
+        }
+    }
+
+    pub fn get_cell_at_pos(&self, grid_pos: GridPos) -> Option<&Cell> {
         self.get_index_from_pos(grid_pos)
             .and_then(|index| self.cells.get(index))
     }
 
-    fn get_index_from_pos(&self, GridPos { x, y }: GridPos) -> Option<usize> {
-        let i = x + self.width * y;
+    pub fn get_index_from_pos(&self, GridPos { x, y }: GridPos) -> Option<usize> {
+        let i = x + self.width as isize * y;
 
-        (0..self.cells.len()).contains(&i).then(|| i)
+        (0..self.cells.len() as isize)
+            .contains(&i)
+            .then(|| i as usize)
     }
 
-    fn get_pos_from_index(&self, index: usize) -> GridPos {
+    pub fn get_pos_from_index(&self, index: usize) -> GridPos {
         get_pos_from_index(index, self.width)
     }
 
-    pub fn recalculate_active_cells(&mut self) {
+    pub fn recalculate_active_cells_old(&mut self) {
         let edges = self.edges();
 
         trace!("recalculation active cells from edges\n{:?}", edges);
 
         let mut is_connected_to_left_edge: HashSet<GridPos> = (0..self.height)
-            .map(|y| GridPos { x: 0, y })
+            .map(|y| GridPos {
+                x: 0,
+                y: y as isize,
+            })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
 
@@ -186,8 +206,8 @@ impl Grid {
 
         let mut is_connected_to_right_edge: HashSet<GridPos> = (0..self.height)
             .map(|y| GridPos {
-                x: self.width - 1,
-                y,
+                x: self.width as isize - 1,
+                y: y as isize,
             })
             .filter(|gp| !self.is_cell_empty(*gp))
             .collect();
@@ -227,6 +247,25 @@ impl Grid {
             .intersection(&is_connected_to_right_edge)
             .collect();
 
+        // loop {
+        //     let adjacency = crate::grid_algorithms::Adjacency::from_grid(self);
+        //     let corner_nodes_with_one_edge = adjacency.corner_nodes_with_one_edge();
+
+        //     if corner_nodes_with_one_edge.is_empty() {
+        //         break;
+        //     }
+
+        //     for active_gp in active_grid_positions {
+        //         let cell = self.get_cell_at_pos(active_gp).unwrap();
+        //         let (cn_a, cn_b) = grid_pos_to_corner_nodes(active_gp, cell.);
+        //     }
+        // }
+
+        // debug!(
+        //     "corner_nodes_with_one_edge: {:?}",
+        //     corner_nodes_with_one_edge
+        // );
+
         let width = self.width;
         self.cells
             .iter_mut()
@@ -248,6 +287,87 @@ impl Grid {
             "state of grid after recalculation of active cells:\n{}",
             self
         );
+    }
+
+    // Node - a corner in a grid of cells
+    // Cell - a line between two corners or an empty space
+    // Neighbor - a node connected to another node
+
+    pub fn recalculate_active_cells(&mut self) {
+        let mut nodes: HashSet<_> = new_xy_iter(
+            self.width + 1,
+            self.height + 1,
+            GridIterDirectionX::LeftToRight,
+            GridIterDirectionY::BottomToTop,
+        )
+        .map(|(x, y)| gp(x as isize, y as isize))
+        .collect();
+
+        'nodes: loop {
+            for node in nodes.clone().iter() {
+                let mut neighbor_count = 0;
+
+                let other_cell = *node;
+                if self.node_connects_across_cell(&other_cell, node, &nodes) {
+                    neighbor_count += 1;
+                }
+
+                let other_cell = *node - gp(0, 1);
+                if self.node_connects_across_cell(&other_cell, node, &nodes) {
+                    neighbor_count += 1;
+                }
+
+                let other_cell = *node - gp(1, 1);
+                if self.node_connects_across_cell(&other_cell, node, &nodes) {
+                    neighbor_count += 1;
+                }
+
+                let other_cell = *node - gp(1, 0);
+                if self.node_connects_across_cell(&other_cell, node, &nodes) {
+                    neighbor_count += 1;
+                }
+
+                if neighbor_count < 2 {
+                    nodes.remove(&node);
+                    continue 'nodes;
+                }
+            }
+            break 'nodes;
+        }
+
+        'cells: for (index, cell) in self.cells.iter_mut().enumerate() {
+            let cell_pos = get_pos_from_index(index, self.width);
+            for node in cell.corner_nodes(&cell_pos) {
+                if !nodes.contains(&node) {
+                    cell.deactivate();
+                    continue 'cells;
+                }
+            }
+            cell.activate();
+        }
+    }
+
+    fn cells_to_nodes(&self) -> HashMap<usize, Vector<GridPos>> {
+        let mut map: HashMap<usize, Vector<GridPos>> = HashMap::new();
+
+        // for every filled cell, add an entry into the adjacency list
+        // each cell is one "edge" between two "corners"
+        for index in 0..self.cells.len() {
+            // map.insert(index.to_string(), Vec::new());
+            match self.cells.get(index).unwrap() {
+                Cell::Filled(LineFragment { kind, .. }) => {
+                    let (grid_pos_a, grid_pos_b) = index_to_corner_nodes(index, &kind, self.width);
+
+                    let corners = map.entry(index).or_default();
+                    corners.push_back(grid_pos_a);
+                    corners.push_back(grid_pos_b);
+                }
+                // empty cells have no edges
+                Cell::Empty => (),
+            }
+        }
+
+        map
     }
 
     // #region hide
@@ -383,6 +503,35 @@ impl Grid {
         }
     }
 
+    fn node_connects_across_cell(
+        &self,
+        cell_pos: &GridPos,
+        node_pos: &GridPos,
+        nodes: &HashSet<GridPos>,
+    ) -> bool {
+        if !(0..self.width as isize).contains(&cell_pos.x) {
+            return true;
+        };
+        if !(0..self.height as isize).contains(&cell_pos.y) {
+            return false;
+        };
+
+        let cell = self.get_cell_at_pos(*cell_pos).unwrap();
+        if !cell.has_corner_node(cell_pos, node_pos) {
+            return false;
+        };
+        for node in cell.corner_nodes(cell_pos) {
+            if node == *node_pos {
+                continue;
+            }
+            if nodes.contains(&node) {
+                return true;
+            };
+        }
+
+        false
+    }
+
     pub fn pop_top_row(&mut self) -> Vector<Cell> {
         debug!("removing top x from grid");
         let y = self.height - 1;
@@ -442,7 +591,7 @@ impl Grid {
     }
 
     pub fn above(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.y == self.height - 1 {
+        if grid_pos.y == self.height as isize - 1 {
             None
         } else {
             Some(GridPos {
@@ -453,7 +602,7 @@ impl Grid {
     }
 
     pub fn right(&self, grid_pos: GridPos) -> Option<GridPos> {
-        if grid_pos.x == self.width - 1 {
+        if grid_pos.x == self.width as isize - 1 {
             None
         } else {
             Some(GridPos {
@@ -504,9 +653,9 @@ impl Display for Grid {
     }
 }
 
-fn get_pos_from_index(index: usize, width: usize) -> GridPos {
-    let x = index % width;
-    let y = index / width;
+pub fn get_pos_from_index(index: usize, width: usize) -> GridPos {
+    let x = (index % width) as isize;
+    let y = (index / width) as isize;
 
     GridPos { x, y }
 }
@@ -546,40 +695,50 @@ mod tests {
     }
 
     #[test]
-    fn test_get_cell_at_pos() {
-        #[rustfmt::skip]
-        let expected_chars: CharGrid = vec![
-            vec!['.','∧','.'],
-            vec!['/','.','∨'],
-        ];
+    fn testget_cell_at_pos() {
+        let grid = Grid::new_from_str(
+            r#"
+                .c.
+                r.i
+            "#,
+        );
 
-        let grid = Grid::new_from_chars(expected_chars.clone());
-        let actual_chars = vec![
-            vec![
-                grid._get_cell_at_pos(GridPos { x: 0, y: 1 })
-                    .unwrap()
-                    .to_char(),
-                grid._get_cell_at_pos(GridPos { x: 1, y: 1 })
-                    .unwrap()
-                    .to_char(),
-                grid._get_cell_at_pos(GridPos { x: 2, y: 1 })
-                    .unwrap()
-                    .to_char(),
-            ],
-            vec![
-                grid._get_cell_at_pos(GridPos { x: 0, y: 0 })
-                    .unwrap()
-                    .to_char(),
-                grid._get_cell_at_pos(GridPos { x: 1, y: 0 })
-                    .unwrap()
-                    .to_char(),
-                grid._get_cell_at_pos(GridPos { x: 2, y: 0 })
-                    .unwrap()
-                    .to_char(),
-            ],
-        ];
-
-        assert_eq!(expected_chars, actual_chars);
+        assert_eq!(
+            ".",
+            grid.get_cell_at_pos(GridPos { x: 0, y: 1 })
+                .unwrap()
+                .to_str()
+        );
+        assert_eq!(
+            "c",
+            grid.get_cell_at_pos(GridPos { x: 1, y: 1 })
+                .unwrap()
+                .to_str()
+        );
+        assert_eq!(
+            ".",
+            grid.get_cell_at_pos(GridPos { x: 2, y: 1 })
+                .unwrap()
+                .to_str()
+        );
+        assert_eq!(
+            "r",
+            grid.get_cell_at_pos(GridPos { x: 0, y: 0 })
+                .unwrap()
+                .to_str()
+        );
+        assert_eq!(
+            ".",
+            grid.get_cell_at_pos(GridPos { x: 1, y: 0 })
+                .unwrap()
+                .to_str()
+        );
+        assert_eq!(
+            "i",
+            grid.get_cell_at_pos(GridPos { x: 2, y: 0 })
+                .unwrap()
+                .to_str()
+        );
     }
 
     //   0,0 0,1
@@ -812,6 +971,37 @@ mod tests {
         ];
 
         // All should be active after recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+    }
+
+    #[test]
+    fn test_recalculate_active_cells_are_active_3() {
+        #[rustfmt::skip]
+        let grid = r#"
+            .rc
+            ri.
+        "#;
+        #[rustfmt::skip]
+        let expected_active: Bitmask = vec![
+            vec![0, 0, 0],
+            vec![0, 0, 0],
+        ];
+        let mut grid = Grid::new_from_str(grid);
+
+        // None should be active before recalculation
+        let actual_active = grid.as_active_bitmask();
+        assert_eq!(expected_active, actual_active);
+
+        grid.recalculate_active_cells();
+
+        #[rustfmt::skip]
+        let expected_active: Bitmask = vec![
+            vec![0, 1, 1],
+            vec![1, 0, 0],
+        ];
+
+        // Connected cells should be active after recalculation
         let actual_active = grid.as_active_bitmask();
         assert_eq!(expected_active, actual_active);
     }

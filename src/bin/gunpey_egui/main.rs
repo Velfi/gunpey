@@ -10,7 +10,6 @@ use egui::{Pos2, Rect};
 use gunpey_lib::grid_pos::GridPos;
 use gunpey_lib::{cell::Cell, grid::Grid, line_fragment::LineFragmentKind};
 use gunpey_lib::{new_random_row, NewRowGenerationParams};
-use itertools::Itertools;
 use log::{debug, error};
 use pixels::{Error, Pixels, SurfaceTexture};
 use rand::prelude::*;

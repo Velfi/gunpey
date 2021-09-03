@@ -1,6 +1,7 @@
 mod game_board;
 
 use crate::app_state::{AppState, View};
+use druid::widget::{LensWrap, Padding, Switch};
 use druid::{
     widget::{Button, Flex, Label, ViewSwitcher, WidgetExt},
     Env, Widget,
@@ -9,7 +10,7 @@ use std::sync::Arc;
 
 pub fn root() -> impl Widget<AppState> {
     ViewSwitcher::new(
-        |data: &AppState, _env| data.current_view(),
+        |data: &AppState, _env| *data.current_view(),
         |selector, _data, _env| match selector {
             View::Start => Box::new(start_screen()),
             View::Game => Box::new(game_screen()),
@@ -32,19 +33,29 @@ pub fn start_screen() -> impl Widget<AppState> {
         .with_child(start_game_button)
 }
 
+pub fn paint_mode_toggle() -> impl Widget<AppState> {
+    let mut row = Flex::row();
+    let switch_label = Label::new("Paint Mode");
+    let paint_mode_toggle = LensWrap::new(Switch::new(), AppState::paint_mode);
+    row.add_child(Padding::new(5.0, switch_label));
+    row.add_child(Padding::new(5.0, paint_mode_toggle));
+
+    row
+}
+
 pub fn game_screen() -> impl Widget<AppState> {
     let score = game_score_widget();
     // let game_grid = game_board::widget();
 
-    let new_row_button = Button::new("Add new row")
-        .on_click(|_ctx, data: &mut AppState, _env: &Env| {
-            data.cycle_grid_rows();
-        })
-        .padding(5.0);
-
     let score_button = Button::new("Score a test point")
         .on_click(|_ctx, data: &mut AppState, _env: &Env| {
             Arc::make_mut(&mut data.test).inner += 1;
+        })
+        .padding(5.0);
+
+    let new_row_button = Button::new("Add new row")
+        .on_click(|_ctx, data: &mut AppState, _env: &Env| {
+            data.cycle_grid_rows();
         })
         .padding(5.0);
 
@@ -59,12 +70,13 @@ pub fn game_screen() -> impl Widget<AppState> {
         .with_child(score)
         .with_child(game_board::make_widget())
         .with_child(score_button)
+        .with_child(paint_mode_toggle())
         .with_child(new_row_button)
         .with_child(back_button)
 }
 
 fn game_score_widget() -> impl Widget<AppState> {
-    let score_label = Label::new("test.inner:");
+    let score_label = Label::new("Score:");
     let score_counter = Label::new(|data: &AppState, _env: &Env| data.test.inner.to_string());
 
     Flex::row()

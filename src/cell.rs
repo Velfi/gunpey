@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
 use crate::adjacency::{are_line_fragments_connecting, Adjacency};
-use crate::line_fragment::LineFragment;
+use crate::grid_pos::{gp, GridPos};
+use crate::line_fragment::{LineFragment, LineFragmentKind};
 use druid::Data;
 
 #[derive(Debug, Clone, Copy, PartialEq, Data)]
@@ -74,6 +75,23 @@ impl Cell {
                 are_line_fragments_connecting(lf_a, adjacency, lf_b)
             }
         }
+    }
+
+    pub fn corner_nodes(&self, cell_pos: &GridPos) -> Vec<GridPos> {
+        match self {
+            Cell::Filled(LineFragment { kind, .. }) => match kind {
+                LineFragmentKind::Caret => vec![*cell_pos, *cell_pos + gp(1, 0)],
+                LineFragmentKind::InvertedCaret => vec![*cell_pos + gp(0, 1), *cell_pos + gp(1, 1)],
+                LineFragmentKind::LeftSlash => vec![*cell_pos + gp(0, 1), *cell_pos + gp(1, 0)],
+                LineFragmentKind::RightSlash => vec![*cell_pos, *cell_pos + gp(1, 1)],
+            },
+
+            Cell::Empty => vec![],
+        }
+    }
+
+    pub fn has_corner_node(&self, cell_pos: &GridPos, node_pos: &GridPos) -> bool {
+        self.corner_nodes(cell_pos).contains(&node_pos)
     }
 }
 
