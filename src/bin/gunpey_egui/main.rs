@@ -93,6 +93,8 @@ fn main() -> Result<(), Error> {
 
                 // Render egui
                 gui.render(encoder, render_target, context);
+
+                Ok(())
             });
 
             // Basic error handling
@@ -146,8 +148,8 @@ fn main() -> Result<(), Error> {
             if input.mouse_pressed(0) {
                 if let Some((cell_pos_a, cell_pos_b)) = world
                     .mouse_coordinates
-                    .and_then(|coords| coords.world_space)
-                    .and_then(|(x, y)| world.cursor_pos(Pos2::new(x as f32, y as f32)))
+                    .and_then(|coords| coords.grid_space)
+                    .and_then(|(x, y)| world.cursor_pos(GridPos::new(x, y)))
                 {
                     match world.grid.swap_cells(cell_pos_a, cell_pos_b) {
                         Ok(_) => {
@@ -232,21 +234,21 @@ impl World {
         let x = ((p.x - game_grid_rect.left()) / CELL_SIZE as f32) as isize;
         let y = ((game_grid_rect.bottom() - p.y) / CELL_SIZE as f32) as isize;
 
-        Some(GridPos { x, y })
+        if x < 0 || x >= self.grid.width as isize || y < 0 || y >= self.grid.height as isize {
+            None
+        } else {
+            Some(GridPos { x, y })
+        }
     }
 
-    fn cursor_pos(&self, p: Pos2) -> Option<(GridPos, GridPos)> {
-        self.world_space_pos_to_grid_space_pos(p)
-            .map(|a_pos| {
-                let b_pos = if a_pos.y == self.grid.height as isize - 1 {
-                    self.grid.below(a_pos)
-                } else {
-                    self.grid.above(a_pos)
-                };
+    fn cursor_pos(&self, a_pos: GridPos) -> Option<(GridPos, GridPos)> {
+        let b_pos = if a_pos.y == self.grid.height as isize - 1 {
+            self.grid.below(a_pos)
+        } else {
+            self.grid.above(a_pos)
+        };
 
-                b_pos.map(|b_pos| (a_pos, b_pos))
-            })
-            .flatten()
+        b_pos.map(|b_pos| (a_pos, b_pos))
     }
 
     /// Update the `World` internal state; bounce the box around the screen.
@@ -302,6 +304,11 @@ impl World {
             game_grid_rect.top() as usize + 1,
         );
 
+        let cursor_pos = self
+            .mouse_coordinates
+            .and_then(|coords| coords.grid_space)
+            .and_then(|p| self.cursor_pos(p.into()));
+
         self.grid
             .cell_rows_in_render_order()
             .into_iter()
@@ -335,6 +342,32 @@ impl World {
                         &Pos2::new(x as f32, y as f32),
                         &Sprite::new(&self.assets, sprite),
                     );
+
+                    if let Some((a_pos, b_pos)) = cursor_pos {
+                        let flip = (game_grid_rect.center().y
+                            + (CELL_SIZE * self.grid.height) as f32)
+                            / 2.0;
+                        let top_x = (a_pos.x as f32 * CELL_SIZE as f32) + x_origin as f32;
+                        let top_y = flip - (a_pos.y as f32 * CELL_SIZE as f32) + y_origin as f32;
+                        let bottom_x = (b_pos.x as f32 * CELL_SIZE as f32) + x_origin as f32;
+                        let bottom_y = flip - (b_pos.y as f32 * CELL_SIZE as f32) + y_origin as f32;
+
+                        blit(
+                            frame,
+                            GAME_WIDTH as usize,
+                            GAME_HEIGHT as usize,
+                            &Pos2::new(top_x, top_y),
+                            &Sprite::new(&self.assets, Asset::Cursor),
+                        );
+
+                        blit(
+                            frame,
+                            GAME_WIDTH as usize,
+                            GAME_HEIGHT as usize,
+                            &Pos2::new(bottom_x, bottom_y),
+                            &Sprite::new(&self.assets, Asset::Cursor),
+                        );
+                    }
                 }
                 row_index += 1;
             });

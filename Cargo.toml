@@ -2,7 +2,7 @@
 name = "gunpey"
 version = "0.1.0"
 authors = ["Zelda Hessler <zelda.hessler@pm.me>"]
-edition = "2018"
+edition = "2021"
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,7 +17,7 @@ name = "gunpey"
 name = "gunpey_egui"
 
 [dependencies]
-anyhow = "1.0.43"
+anyhow = "1.0.52"
 bitflags = "1.3.2"
 dotenv = "0.15.0"
 # https://www.youtube.com/watch?v=7nqcL0mjMjw
@@ -26,22 +26,21 @@ druid = { git = "https://github.com/linebender/druid.git", branch = "master", fe
   "im",
   "png",
 ] }
-egui = "0.14.2"
-egui_wgpu_backend = "0.12.0"
-egui_winit_platform = "0.10.0"
+egui = "0.16.1"
+egui_wgpu_backend = "0.16.0"
+egui_winit_platform = "0.13.0"
 env_logger = "0.9.0"
-image = "0.23.14"
-itertools = "0.10.1"
+image = "0.24.0"
+itertools = "0.10.3"
 line_drawing = "1.0.0"
 log = "0.4.14"
-nalgebra = "0.29.0"
+nalgebra = "0.30.1"
 # TODO waiting for this PR to get merged https://github.com/parasyte/pixels/pull/18
-pixels = "0.6.0"
-pretty_assertions = "0.7.2"
+pixels = "0.9.0"
 rand = "0.8.4"
 thiserror = "1.0.26"
-winit = "0.25.0"
-winit_input_helper = "0.10.0"
+winit = "0.26.1"
+winit_input_helper = "0.11.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"

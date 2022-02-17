@@ -42,6 +42,12 @@ impl GridPos {
     }
 }
 
+impl Into<GridPos> for (isize, isize) {
+    fn into(self) -> GridPos {
+        gp(self.0, self.1)
+    }
+}
+
 impl Debug for GridPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GridPos {{x: {}, y: {}}}", self.x, self.y)

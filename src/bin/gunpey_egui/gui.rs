@@ -85,7 +85,7 @@ impl Gui {
     fn ui(&mut self, ctx: &egui::CtxRef, world: &mut World) {
         egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                egui::menu::menu(ui, "File", |ui| {
+                egui::menu::menu_button(ui, "File", |ui| {
                     if ui.button("About...").clicked() {
                         self.window_open = true;
                     }
@@ -138,7 +138,7 @@ impl Gui {
         self.rpass.update_texture(
             &context.device,
             &context.queue,
-            &self.platform.context().texture(),
+            &self.platform.context().font_image(),
         );
         self.rpass
             .update_user_textures(&context.device, &context.queue);
