@@ -1,4 +1,4 @@
-use crate::adjacency::{adjacency_of_grid_positions, Adjacency};
+use crate::adjacency::adjacency_of_grid_positions;
 use crate::cell::Cell;
 use crate::grid_algorithms::index_to_corner_nodes;
 use crate::grid_iterator_2d::{new_xy_iter, GridIterDirectionX, GridIterDirectionY};
@@ -135,7 +135,12 @@ impl Grid {
                 }
                 res
             }
-            _ => Err(GunpeyLibError::CantSwapBadPosition(cell_pos_a, cell_pos_b)),
+            _ => Err(GunpeyLibError::CantSwapBadPosition {
+                a: cell_pos_a,
+                b: cell_pos_b,
+                width: self.width,
+                height: self.height,
+            }),
         }
     }
 
@@ -354,7 +359,7 @@ impl Grid {
                         is_connected_to_left_edge: false,
                         is_connected_to_right_edge: false,
                         is_part_of_a_chain: false,
-                        cell_index: index,
+                        _cell_index: index,
                     }),
                 );
 
@@ -371,7 +376,7 @@ impl Grid {
                             is_connected_to_left_edge: false,
                             is_connected_to_right_edge: false,
                             is_part_of_a_chain: false,
-                            cell_index: index,
+                            _cell_index: index,
                         }),
                     );
 
@@ -385,14 +390,15 @@ impl Grid {
                     is_connected_to_left_edge: false,
                     is_connected_to_right_edge: false,
                     is_part_of_a_chain: true,
-                    cell_index: index,
+                    _cell_index: index,
                 }),
             );
         }
 
-        debug!("cell_statuses={:#?}", cell_statuses);
+        trace!("cell_statuses={:#?}", cell_statuses);
 
-        'edgeChecks: loop {
+        // Edge-checking loop
+        loop {
             let mut had_changes = false;
             for (cell_pos, cell_status) in cell_statuses.iter() {
                 if !cell_status.borrow().is_part_of_a_chain {
@@ -442,8 +448,6 @@ impl Grid {
                     })
                     .collect();
 
-                debug!("");
-
                 // where "cell.connected_neighbors" is all neighbor cells that share a vertex,
                 // UNLESS that vertex is on the left or right borders
                 if !cell_status.borrow().is_connected_to_left_edge {
@@ -490,7 +494,7 @@ impl Grid {
         }
     }
 
-    fn cells_to_nodes(&self) -> HashMap<usize, Vector<GridPos>> {
+    fn _cells_to_nodes(&self) -> HashMap<usize, Vector<GridPos>> {
         let mut map: HashMap<usize, Vector<GridPos>> = HashMap::new();
 
         // for every filled cell, add an entry into the adjacency list
@@ -642,7 +646,11 @@ impl Grid {
 
             Ok(())
         } else {
-            Err(GunpeyLibError::CantSwapBadIndex(cell_index_a, cell_index_b))
+            Err(GunpeyLibError::CantSwapBadIndex {
+                a: cell_index_a,
+                b: cell_index_b,
+                length: self.cells.len(),
+            })
         }
     }
 
@@ -676,7 +684,7 @@ impl Grid {
     }
 
     pub fn pop_top_row(&mut self) -> Vector<Cell> {
-        debug!("removing top x from grid");
+        trace!("removing top row from grid");
         let y = self.height - 1;
         let start_of_last_row = y * self.width;
         let end_of_last_row = self.cells.len();
@@ -690,7 +698,7 @@ impl Grid {
             return Err(GunpeyLibError::InvalidRowLength(new_row.len(), self.width));
         }
 
-        debug!("pushing new x to bottom of grid");
+        trace!("pushing new row to bottom of grid");
         new_row.append(self.cells.clone());
         self.cells = new_row;
 
@@ -808,7 +816,7 @@ struct CellStatus {
     pub is_connected_to_left_edge: bool,
     pub is_connected_to_right_edge: bool,
     pub is_part_of_a_chain: bool,
-    pub cell_index: usize,
+    pub _cell_index: usize,
 }
 
 #[cfg(test)]

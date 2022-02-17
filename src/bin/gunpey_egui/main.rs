@@ -9,8 +9,8 @@ use assets::{Asset, Assets};
 use egui::{Pos2, Rect};
 use gunpey_lib::grid_pos::GridPos;
 use gunpey_lib::{cell::Cell, grid::Grid, line_fragment::LineFragmentKind};
-use gunpey_lib::{new_random_row, NewRowGenerationParams};
-use log::{debug, error};
+use gunpey_lib::{new_random_row, new_small_grid, NewRowGenerationParams};
+use log::{debug, error, trace};
 use pixels::{Error, Pixels, SurfaceTexture};
 use rand::prelude::*;
 use sprite::{blit, rect, Sprite};
@@ -23,12 +23,14 @@ use winit::{
 use winit_input_helper::WinitInputHelper;
 
 mod assets;
-mod button;
+// mod button;
 mod gui;
 mod sprite;
 
-const WIDTH: u32 = 320;
-const HEIGHT: u32 = 256;
+const WINDOW_WIDTH: u32 = 800;
+const WINDOW_HEIGHT: u32 = 600;
+const GAME_WIDTH: u32 = 320;
+const GAME_HEIGHT: u32 = 256;
 const BOX_SIZE: i16 = 64;
 const CELL_SIZE: usize = 16;
 
@@ -40,7 +42,7 @@ pub struct World {
     velocity_y: i16,
     // If Some, mouse pointer is over the screen,
     // If None, mouse pointer is outside the screen
-    mouse_xy: Option<(i16, i16)>,
+    mouse_coordinates: Option<MouseCoordinates>,
     assets: Assets,
     grid: Grid,
     rng: Arc<StdRng>,
@@ -52,7 +54,7 @@ fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
         WindowBuilder::new()
             .with_title("Gunpey")
             .with_inner_size(size)
@@ -65,7 +67,7 @@ fn main() -> Result<(), Error> {
         let window_size = window.inner_size();
         let scale_factor = window.scale_factor();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
+        let pixels = Pixels::new(GAME_WIDTH, GAME_HEIGHT, surface_texture)?;
         let gui = Gui::new(window_size.width, window_size.height, scale_factor, &pixels);
 
         (pixels, gui)
@@ -122,16 +124,29 @@ fn main() -> Result<(), Error> {
                 gui.resize(size.width, size.height);
             }
 
-            world.mouse_xy = input
-                .mouse()
-                .map(|xy| pixels.window_pos_to_pixel(xy).ok())
-                .flatten()
-                // Ignore any rust-analyzer errors here, they're fake
-                .map(|(x, y)| (x as i16, y as i16));
+            world.mouse_coordinates = input.mouse().map(|xy| {
+                let world_space = pixels
+                    .window_pos_to_pixel(xy)
+                    .ok()
+                    .map(|(x, y)| (x as i16, y as i16));
+
+                let grid_space = world_space
+                    .and_then(|(x, y)| {
+                        world.world_space_pos_to_grid_space_pos(Pos2::new(x as f32, y as f32))
+                    })
+                    .map(|grid_pos| grid_pos.to_tuple());
+
+                MouseCoordinates {
+                    screen_space: xy,
+                    world_space,
+                    grid_space,
+                }
+            });
 
             if input.mouse_pressed(0) {
                 if let Some((cell_pos_a, cell_pos_b)) = world
-                    .mouse_xy
+                    .mouse_coordinates
+                    .and_then(|coords| coords.world_space)
                     .and_then(|(x, y)| world.cursor_pos(Pos2::new(x as f32, y as f32)))
                 {
                     match world.grid.swap_cells(cell_pos_a, cell_pos_b) {
@@ -154,13 +169,7 @@ impl World {
     /// Create a new `World` instance that can draw a moving box.
     fn new() -> Self {
         let rng = Arc::new(SeedableRng::from_entropy());
-        let grid = Grid::new_from_str(
-            r#"
-        .cc
-        .l.
-        ..l
-        "#,
-        );
+        let grid = new_small_grid();
         let assets = assets::load_assets();
 
         Self {
@@ -168,7 +177,7 @@ impl World {
             box_y: 16,
             velocity_x: 1,
             velocity_y: 1,
-            mouse_xy: None,
+            mouse_coordinates: None,
             assets,
             rng,
             grid,
@@ -190,7 +199,7 @@ impl World {
         };
 
         let popped_row = self.grid.pop_top_row();
-        debug!("popped row: {:#?}", popped_row);
+        trace!("popped row: {:#?}", popped_row);
 
         let rng = Arc::make_mut(&mut self.rng);
         let new_row = new_random_row(rng, new_row_params);
@@ -214,25 +223,20 @@ impl World {
         )
     }
 
-    fn grid_pos(&self, p: Pos2) -> Option<GridPos> {
-        let game_grid_rect = self.game_grid_rect();
+    fn world_space_pos_to_grid_space_pos(&self, p: Pos2) -> Option<GridPos> {
+        let mut game_grid_rect = self.game_grid_rect();
+        let screen_rect =
+            Rect::from_x_y_ranges(0.0..=(GAME_WIDTH as f32), 0.0..=(GAME_HEIGHT as f32));
+        game_grid_rect.set_center(screen_rect.center());
 
-        if p.x < game_grid_rect.left() || p.y < game_grid_rect.top() {
-            return None;
-        }
+        let x = ((p.x - game_grid_rect.left()) / CELL_SIZE as f32) as isize;
+        let y = ((game_grid_rect.bottom() - p.y) / CELL_SIZE as f32) as isize;
 
-        let x = (p.x / CELL_SIZE as f32) as isize;
-        let y = (p.y / CELL_SIZE as f32) as isize;
-
-        if y >= game_grid_rect.bottom() as isize || x >= game_grid_rect.right() as isize {
-            None
-        } else {
-            Some(GridPos { x, y })
-        }
+        Some(GridPos { x, y })
     }
 
     fn cursor_pos(&self, p: Pos2) -> Option<(GridPos, GridPos)> {
-        self.grid_pos(p)
+        self.world_space_pos_to_grid_space_pos(p)
             .map(|a_pos| {
                 let b_pos = if a_pos.y == self.grid.height as isize - 1 {
                     self.grid.below(a_pos)
@@ -247,10 +251,10 @@ impl World {
 
     /// Update the `World` internal state; bounce the box around the screen.
     fn update(&mut self) {
-        if self.box_x <= 0 || self.box_x + BOX_SIZE > WIDTH as i16 {
+        if self.box_x <= 0 || self.box_x + BOX_SIZE > GAME_WIDTH as i16 {
             self.velocity_x *= -1;
         }
-        if self.box_y <= 0 || self.box_y + BOX_SIZE > HEIGHT as i16 {
+        if self.box_y <= 0 || self.box_y + BOX_SIZE > GAME_HEIGHT as i16 {
             self.velocity_y *= -1;
         }
 
@@ -263,10 +267,10 @@ impl World {
     /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
     fn draw(&self, frame: &mut [u8]) {
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = (i % WIDTH as usize) as i16;
-            let y = (i / WIDTH as usize) as i16;
+            let x = (i % GAME_WIDTH as usize) as i16;
+            let y = (i / GAME_WIDTH as usize) as i16;
 
-            if let Some(xy) = self.mouse_xy {
+            if let Some(xy) = self.mouse_coordinates.and_then(|coords| coords.world_space) {
                 if xy == (x, y) {
                     pixel.copy_from_slice(&[0xff, 0x00, 0x00, 0xff]);
                     continue;
@@ -288,7 +292,8 @@ impl World {
         }
 
         let mut game_grid_rect = self.game_grid_rect().expand(1.0);
-        let screen_rect = Rect::from_x_y_ranges(0.0..=(WIDTH as f32), 0.0..=(HEIGHT as f32));
+        let screen_rect =
+            Rect::from_x_y_ranges(0.0..=(GAME_WIDTH as f32), 0.0..=(GAME_HEIGHT as f32));
         game_grid_rect.set_center(screen_rect.center());
 
         let mut row_index = 0;
@@ -325,8 +330,8 @@ impl World {
 
                     blit(
                         frame,
-                        WIDTH as usize,
-                        HEIGHT as usize,
+                        GAME_WIDTH as usize,
+                        GAME_HEIGHT as usize,
                         &Pos2::new(x as f32, y as f32),
                         &Sprite::new(&self.assets, sprite),
                     );
@@ -336,11 +341,18 @@ impl World {
 
         rect(
             frame,
-            WIDTH.try_into().unwrap(),
-            HEIGHT.try_into().unwrap(),
+            GAME_WIDTH.try_into().unwrap(),
+            GAME_HEIGHT.try_into().unwrap(),
             &game_grid_rect.left_top(),
             &game_grid_rect.right_bottom(),
             [0xFF, 0x66, 0x00, 0xFF],
         );
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct MouseCoordinates {
+    pub screen_space: (f32, f32),
+    pub world_space: Option<(i16, i16)>,
+    pub grid_space: Option<(isize, isize)>,
 }

@@ -96,15 +96,26 @@ impl Gui {
         egui::Window::new("Debug Menu")
             .open(&mut self.window_open)
             .show(ctx, |ui| {
-                ui.label("This example demonstrates using egui with pixels.");
-                ui.label("Made with 💖 in San Francisco!");
-                if ui.button("Cycle rows").clicked() {
-                    world.cycle_grid_rows();
+                if let Some(mouse_coordinates) = world.mouse_coordinates {
+                    ui.label("Mouse Location");
+
+                    ui.monospace(format!("Screen Space {:?}", mouse_coordinates.screen_space));
+                    ui.monospace(format!("World Space {:?}", mouse_coordinates.world_space));
+                    ui.monospace(format!("Grid Space {:?}", mouse_coordinates.grid_space));
                 }
 
-                if ui.button("Reset grid").clicked() {
-                    world.reset_grid();
-                }
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x /= 2.0;
+                    if ui.button("Cycle rows").clicked() {
+                        world.cycle_grid_rows();
+                    }
+
+                    if ui.button("Reset grid").clicked() {
+                        world.reset_grid();
+                    }
+                });
 
                 ui.separator();
 
